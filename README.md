@@ -70,5 +70,3 @@ You can run tests using the following command:
 ```bash
 poetry run pytest
 ```
-
-
