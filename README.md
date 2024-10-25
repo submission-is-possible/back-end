@@ -48,7 +48,7 @@ This project uses [Django](https://www.djangoproject.com/) as the web framework.
 You can run the Django development server using the following command:
 
 ```bash
-poetry run python manage.py runserver
+poetry run python back_end/manage.py runserver
 ```
 
 
