@@ -1,0 +1,61 @@
+name: Django CI with Poetry
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+
+    - name: Configure Poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v3
+      with:
+        path: ./.venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+
+    - name: Install Dependencies
+      run: poetry install
+
+    - name: Run Tests with pytest
+      run: |
+        poetry run pytest
+
+    - name: Create Flake8 Configuration
+      run: |
+         echo "[flake8]
+          max-line-length = 200
+          exclude = 
+              .git,
+              __pycache__,
+              */migrations/*,
+              .venv,
+              build,
+              dist
+          per-file-ignores =
+              __init__.py: F401
+          # Ignore for some rules
+          ignore = 
+              W503,  # line break before binary operator
+              E203,  # whitespace before ':'
+          statistics = True
+          count = True" > .flake8
