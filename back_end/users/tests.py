@@ -19,4 +19,17 @@ class CreateUserTestCase(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(User.objects.count(), 1)
 
+    def test_create_user_duplicate_email(self):
+        User.objects.create(first_name="John", last_name="Doe", email="john.doe@example.com", password="pass123")
+        data = {
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "email": "john.doe@example.com",
+            "password": "securepassword123"
+        }
+        response = self.client.post(reverse('create_user'), json.dumps(data), content_type="application/json")
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Email already in use", response.json().get("error"))
+    
     
