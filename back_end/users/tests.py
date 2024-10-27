@@ -32,7 +32,6 @@ class CreateUserTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Email already in use", response.json().get("error"))
     
-    
     def test_create_user_missing_fields(self):
         """Test errore per campi mancanti nella richiesta."""
         response = self.client.post(self.url, data=json.dumps({
@@ -45,4 +44,18 @@ class CreateUserTestCase(TestCase):
         self.assertIn('error', response.json())
         self.assertEqual(response.json()['error'], 'Missing fields')
 
+    def test_create_user_invalid_json(self):
+        """Test errore per JSON non valido."""
+        response = self.client.post(self.url, data="Invalid JSON", content_type='application/json')
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+        self.assertEqual(response.json()['error'], 'Invalid JSON')
 
+    def test_create_user_invalid_method(self):
+        """Test errore per metodo non POST."""
+        response = self.client.get(self.url)  # Usa GET invece di POST
+
+        self.assertEqual(response.status_code, 405)
+        self.assertIn('error', response.json())
+        self.assertEqual(response.json()['error'], 'Only POST requests are allowed')
