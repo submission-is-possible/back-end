@@ -33,3 +33,16 @@ class CreateUserTestCase(TestCase):
         self.assertIn("Email already in use", response.json().get("error"))
     
     
+    def test_create_user_missing_fields(self):
+        """Test errore per campi mancanti nella richiesta."""
+        response = self.client.post(self.url, data=json.dumps({
+            'first_name': 'John',
+            'email': 'john.doe@example.com',
+            'password': 'password123'
+        }), content_type='application/json')  # manca il campo last_name
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.json())
+        self.assertEqual(response.json()['error'], 'Missing fields')
+
+
