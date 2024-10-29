@@ -59,3 +59,47 @@ class CreateUserTestCase(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertIn('error', response.json())
         self.assertEqual(response.json()['error'], 'Only POST requests are allowed')
+
+class LoginUserTestCase(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.url = reverse('login')
+        # Creazione utente senza `create_user`, con `objects.create`
+        self.user = User.objects.create(
+            first_name="John", last_name="Doe", email="john.doe@example.com", password="securepassword123"
+        )
+
+    #verifica il login con credenziali corrette.
+    def test_login_success(self):
+        data = {
+            "email": "john.doe@example.com",
+            "password": "securepassword123"
+        }
+        response = self.client.post(self.url, json.dumps(data), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Login successful", response.json().get("message"))
+
+    #verifica il login con credenziali errate.
+    def test_login_invalid_credentials(self):
+        data = {
+            "email": "john.doe@example.com",
+            "password": "wrongpassword"
+        }
+        response = self.client.post(self.url, json.dumps(data), content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("Invalid email or password", response.json().get("error"))
+
+    #verifica la mancanza di campi obbligatori.
+    def test_login_missing_fields(self):
+        data = {
+            "email": "john.doe@example.com"
+        }
+        response = self.client.post(self.url, json.dumps(data), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Email and password are required.", response.json().get("error"))
+
+    #verifica che solo le richieste POST siano accettate.
+    def test_login_invalid_method(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 405)
+        self.assertIn('Only POST requests are allowed', response.json().get("error"))
