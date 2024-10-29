@@ -1,5 +1,5 @@
-from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
+from django.contrib.auth import authenticate, login
 from .models import User
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
@@ -56,6 +56,45 @@ def create_user(request):
             return JsonResponse({'error': 'Database integrity error'}, status=400)
     
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+@csrf_exempt
+def login_user(request):
+    if request.method == 'POST':
+        try:
+            # Estrai i dati dal body della richiesta
+            data = json.loads(request.body)
+            email = data.get('email')
+            password = data.get('password')
+
+            # Verifica che i campi siano presenti
+            if not (email and password):
+                return JsonResponse({'error': 'Email and password are required.'}, status=400)
+
+            # Autentica l'utente questa funzione si puo usare solo SE LE PASSWORD SONO HASHATE
+            # QUINDI IN CREATE_USER BISOGNA USARE LA FUNZIONE make_password(password) quando la salvo nel db
+            # user = authenticate(request, username=email, password=password)
+            #if user is not None:
+            #    login(request, user)  # Crea una sessione per l'utente, permettendo di essere riconosciuto in seguito
+            #    return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
+            #else:
+            #    return JsonResponse({'error': 'Invalid email or password'}, status=401)
+
+            # Cerca l'utente tramite email
+            try:
+                user = User.objects.get(email=email)
+                # Confronta la password memorizzata con quella fornita
+                if user.password == password:
+                    login(request, user)  # Crea una sessione per l'utente
+                    return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
+                else:
+                    return JsonResponse({'error': 'Invalid email or password'}, status=401)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'Invalid email or password'}, status=401)
+        
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 def list_users(request):
     pass
