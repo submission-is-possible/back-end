@@ -1,4 +1,5 @@
 from django.test import TestCase, Client
+from django.contrib.auth.hashers import make_password
 from .models import User
 from django.urls import reverse
 import json
@@ -64,9 +65,13 @@ class LoginUserTestCase(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('login')
-        # Creazione utente senza `create_user`, con `objects.create`
+        
+        # Crea l'utente di test con la password hashata
         self.user = User.objects.create(
-            first_name="John", last_name="Doe", email="john.doe@example.com", password="securepassword123"
+            first_name="John",
+            last_name="Doe",
+            email="john.doe@example.com",
+            password=make_password("securepassword123")  # Usa make_password per hasharla
         )
 
     #verifica il login con credenziali corrette.
