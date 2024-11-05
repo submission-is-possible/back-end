@@ -1,5 +1,6 @@
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth import authenticate, login
+from django.contrib.auth.hashers import make_password, check_password
 from .models import User
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
@@ -35,26 +36,21 @@ def create_user(request):
             # Verifica che tutti i campi siano presenti
             if not (first_name and last_name and email and password):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
-
             # Controlla se esiste già un utente con quell'email
             if User.objects.filter(email=email).exists():
                 return JsonResponse({'error': 'Email already in use'}, status=400)
-
             # Crea il nuovo utente
             user = User.objects.create(
                 first_name=first_name,
                 last_name=last_name,
                 email=email,
-                password=password
+                password=make_password(password)
             )
             return JsonResponse({'message': f"User {user.first_name} created!"}, status=201)
-        
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        
         except IntegrityError:
             return JsonResponse({'error': 'Database integrity error'}, status=400)
-    
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 @csrf_exempt
@@ -65,32 +61,24 @@ def login_user(request):
             data = json.loads(request.body)
             email = data.get('email')
             password = data.get('password')
+            print(email, password)
 
             # Verifica che i campi siano presenti
             if not (email and password):
                 return JsonResponse({'error': 'Email and password are required.'}, status=400)
 
-            # Autentica l'utente questa funzione si puo usare solo SE LE PASSWORD SONO HASHATE
-            # QUINDI IN CREATE_USER BISOGNA USARE LA FUNZIONE make_password(password) quando la salvo nel db
-            # user = authenticate(request, username=email, password=password)
-            #if user is not None:
-            #    login(request, user)  # Crea una sessione per l'utente, permettendo di essere riconosciuto in seguito
-            #    return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
-            #else:
-            #    return JsonResponse({'error': 'Invalid email or password'}, status=401)
-
-            # Cerca l'utente tramite email
+             # Cerca l'utente tramite email
             try:
                 user = User.objects.get(email=email)
-                # Confronta la password memorizzata con quella fornita
-                if user.password == password:
-                    login(request, user)  # Crea una sessione per l'utente
+                # Confronta la password fornita con quella salvata nel database
+                if check_password(password, user.password):
+                    # Registra l'utente nella sessione
+                    login(request, user)  
                     return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
                 else:
                     return JsonResponse({'error': 'Invalid email or password'}, status=401)
             except User.DoesNotExist:
                 return JsonResponse({'error': 'Invalid email or password'}, status=401)
-        
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
