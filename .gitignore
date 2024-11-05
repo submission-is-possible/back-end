@@ -1,1 +1,7 @@
 .pytest_cache
+
+# Ignora tutte le cartelle __pycache__
+**/__pycache__/
+
+# Ignora il file del database SQLite
+db.sqlite3
