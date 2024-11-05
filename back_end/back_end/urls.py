@@ -23,5 +23,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('users/', include('users.urls')),
     path('conference/', include('conference.urls')),
+    path('conference_roles/', include('conference_roles.urls')),
     #path('create_user', views.create_user, name='create_user'),
 ]
