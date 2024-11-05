@@ -1,6 +1,6 @@
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth import authenticate, login
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
 from .models import User
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
@@ -53,6 +53,7 @@ def create_user(request):
             return JsonResponse({'error': 'Database integrity error'}, status=400)
     return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
+@csrf_exempt
 def login_user(request):
     if request.method == 'POST':
         try:
@@ -60,17 +61,23 @@ def login_user(request):
             data = json.loads(request.body)
             email = data.get('email')
             password = data.get('password')
+            print(email, password)
 
             # Verifica che i campi siano presenti
             if not (email and password):
                 return JsonResponse({'error': 'Email and password are required.'}, status=400)
 
-            # Autentica l'utente
-            user = authenticate(request, username=email, password=password)
-            if user is not None:
-                login(request, user)  # Crea una sessione per l'utente
-                return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
-            else:
+             # Cerca l'utente tramite email
+            try:
+                user = User.objects.get(email=email)
+                # Confronta la password fornita con quella salvata nel database
+                if check_password(password, user.password):
+                    # Registra l'utente nella sessione
+                    login(request, user)  
+                    return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
+                else:
+                    return JsonResponse({'error': 'Invalid email or password'}, status=401)
+            except User.DoesNotExist:
                 return JsonResponse({'error': 'Invalid email or password'}, status=401)
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
