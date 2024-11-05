@@ -42,3 +42,28 @@ def create_conference(request):
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+    
+
+@csrf_exempt
+def delete_conference(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            conference_id = data.get('conference_id')
+
+            # Verifica che l'ID della conferenza sia fornito
+            if not conference_id:
+                return JsonResponse({'error': 'Missing conference_id'}, status=400)
+
+            # Cerca la conferenza e eliminala
+            try:
+                conference = Conference.objects.get(id=conference_id)
+                conference.delete()  # Elimina la conferenza
+                return JsonResponse({'message': 'Conference deleted successfully'}, status=200)
+            except Conference.DoesNotExist:
+                return JsonResponse({'error': 'Conference not found'}, status=404)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)

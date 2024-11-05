@@ -3,5 +3,8 @@
 # Ignora tutte le cartelle __pycache__
 **/__pycache__/
 
+# Ignora file bytecode
+*.pyc
+
 # Ignora il file del database SQLite
 db.sqlite3
