@@ -1,6 +1,6 @@
 from django.db import models
 from users.models import User
-from .models import Conference  # Importa Conference se si trova nella stessa app o specifica l'app corretta
+from conference.models import Conference  # Importa Conference se si trova nella stessa app o specifica l'app corretta
 
 class ConferenceRole(models.Model):
     ROLE_CHOICES = [
