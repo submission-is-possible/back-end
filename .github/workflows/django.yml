@@ -2,9 +2,12 @@ name: Django CI with Poetry
 
 on:
   push:
-    branches: [ main ]
+    branches-ignore:
+      - 'gh-pages'
+
   pull_request:
-    branches: [ main ]
+    branches-ignore:
+      - 'gh-pages'
 
 jobs:
   test:
