@@ -39,7 +39,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'users',
-    'conference'
+    'conference',
+    'rest_framework',
+    'drf_yasg'
 ]
 
 MIDDLEWARE = [
