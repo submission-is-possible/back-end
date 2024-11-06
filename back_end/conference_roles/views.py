@@ -4,6 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from users.models import User
 from .models import Conference, ConferenceRole
 from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
 
 '''esempio richiesta post
 {
@@ -61,28 +62,40 @@ def create_conference_role(request):
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
+'''  esempio richiesta post
+POST /user/conferences/?page=2&page_size=10
+Content-Type: application/json
+{
+    "user_id": 1
+}
 '''
-L’URL dovrebbe seguire questo formato, dove user_id rappresenta l'ID dell'utente le cui conferenze stiamo 
-cercando:
-            GET /user/<user_id>/conferences/
+def get_user_conferences(request):
+    """Restituisce una lista di conferenze di cui l'utente fa parte con paginazione."""
 
-La richiesta può includere due parametri di query opzionali:
-page: il numero della pagina che vuoi ottenere. Se non viene fornito, il valore predefinito è 1.
-page_size: il numero di conferenze per pagina. Se non viene fornito, il valore predefinito è 20.
+    # Verifica che la richiesta sia POST
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
-Esempio di Richiesta Completa:  GET /user/1/conferences/?page=2&page_size=10
-'''
-def get_user_conferences(request, user_id):
-    """Restituisce una lista di conferenze di cui l'utente fa parte con pagination."""
-    # Estrai il numero di pagina e il limite per la pagination dai parametri della richiesta
+    # Parse del corpo della richiesta per ottenere user_id
+    try:
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    # Verifica che user_id sia fornito
+    if not user_id:
+        return JsonResponse({"error": "Missing user_id"}, status=400)
+
+    # Estrai il numero di pagina e il limite per la paginazione dai parametri della richiesta
     page_number = request.GET.get('page', 1)
-    page_size = request.GET.get('page_size', 20)  # Numero di conferenze per pagina
+    page_size = request.GET.get('page_size', 20)
 
-    # Filtra le conferenze a cui l'utente partecipa usando ConferenceRole
+    # Filtra le conferenze a cui l'utente specificato partecipa
     conferences = Conference.objects.filter(conference_roles__user_id=user_id)
 
-    # Applica la pagination
-    paginator = Paginator(conferences, page_size)  # Limita a `page_size` conferenze per pagina
+    # Applica la paginazione
+    paginator = Paginator(conferences, page_size)
     page_obj = paginator.get_page(page_number)
 
     # Crea la risposta con le conferenze per la pagina corrente
@@ -97,7 +110,6 @@ def get_user_conferences(request, user_id):
                 "description": conference.description,
                 "created_at": conference.created_at.isoformat(),
                 "deadline": conference.deadline.isoformat(),
-                # Aggiungi altri campi se necessario
             }
             for conference in page_obj
         ],

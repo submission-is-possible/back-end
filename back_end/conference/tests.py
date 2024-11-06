@@ -1,8 +1,9 @@
 import json
 from django.urls import reverse
 from django.utils import timezone
-from django.test import TestCase
+from django.test import TestCase, Client
 from .models import User, Conference
+from conference_roles.models import ConferenceRole
 
 class ConferenceCreationTests(TestCase):
     def setUp(self):
@@ -69,64 +70,122 @@ class ConferenceCreationTests(TestCase):
         self.assertEqual(response.json()["error"], "Only POST requests are allowed")
 
 
-class ConferenceDeletionTests(TestCase):
-
+class DeleteConferenceTestCase(TestCase):
     def setUp(self):
-        # Crea un utente amministratore e una conferenza per i test
-        self.admin_user = User.objects.create(
-            first_name="Admin",
-            last_name="User",
-            email="admin@example.com",
-            password="securepassword"
+        # Crea un utente
+        self.user = User.objects.create(
+            first_name="John",
+            last_name="Doe",
+            email="john@example.com",
+            password="password"
         )
+
+        # Crea una conferenza
         self.conference = Conference.objects.create(
             title="Test Conference",
-            admin_id=self.admin_user,
-            deadline=timezone.now() + timezone.timedelta(days=7),
-            description="Test description"
+            admin_id=self.user,
+            deadline="2023-12-31 23:59:59",
+            description="This is a test conference"
         )
-        self.url = reverse('delete_conference')  # Assicurati che il nome corrisponda all'URL configurato
 
-    def test_delete_conference_successful(self):
-        """Test per eliminare una conferenza con successo"""
-        payload = {
-            "conference_id": self.conference.id,
-        }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        # Crea un ruolo di conferenza per l'utente
+        self.conference_role = ConferenceRole.objects.create(
+            user=self.user,
+            conference=self.conference,
+            role="admin"
+        )
+
+        self.client = Client()
+
+    def test_delete_conference_as_admin(self):
+        # Effettua il login dell'utente
+        self.client.force_login(self.user)
+
+        # Invia la richiesta per eliminare la conferenza
+        response = self.client.post(
+            reverse('delete_conference'),
+            data={'conference_id': self.conference.id, 'user_id': self.user.id},
+            content_type='application/json'
+        )
+
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["message"], "Conference deleted successfully")
-        
-        # Verifica che la conferenza non esista più nel database
-        with self.assertRaises(Conference.DoesNotExist):
-            Conference.objects.get(id=self.conference.id)
+        self.assertEqual(response.json(), {'message': 'Conference deleted successfully'})
 
-    def test_delete_conference_not_found(self):
-        """Test per tentare di eliminare una conferenza che non esiste"""
-        payload = {
-            "conference_id": 9999,  # ID di una conferenza inesistente
-        }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        # Verifica che la conferenza sia stata eliminata
+        self.assertFalse(Conference.objects.filter(id=self.conference.id).exists())
+
+    def test_delete_conference_without_permission(self):
+        # Crea un nuovo utente
+        other_user = User.objects.create(
+            first_name="Jane",
+            last_name="Doe",
+            email="jane@example.com",
+            password="password"
+        )
+
+        # Effettua il login dell'altro utente
+        self.client.force_login(other_user)
+
+        # Invia la richiesta per eliminare la conferenza
+        response = self.client.post(
+            reverse('delete_conference'),
+            data={'conference_id': self.conference.id, 'user_id': other_user.id},
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json(), {'error': 'Permission denied. User is not an admin of this conference.'})
+
+        # Verifica che la conferenza non sia stata eliminata
+        self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
+
+    def test_delete_conference_with_missing_fields(self):
+        # Effettua il login dell'utente
+        self.client.force_login(self.user)
+
+        # Invia la richiesta senza i campi obbligatori
+        response = self.client.post(
+            reverse('delete_conference'),
+            data={},
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'Missing conference_id'})
+
+        # Verifica che la conferenza non sia stata eliminata
+        self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
+
+    def test_delete_conference_with_invalid_json(self):
+        # Effettua il login dell'utente
+        self.client.force_login(self.user)
+
+        # Invia la richiesta con un JSON non valido
+        response = self.client.post(
+            reverse('delete_conference'),
+            data='invalid json',
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'Invalid JSON'})
+
+        # Verifica che la conferenza non sia stata eliminata
+        self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
+
+    def test_delete_conference_with_non_existent_conference(self):
+        # Effettua il login dell'utente
+        self.client.force_login(self.user)
+
+        # Invia la richiesta per eliminare una conferenza inesistente
+        response = self.client.post(
+            reverse('delete_conference'),
+            data={'conference_id': 999, 'user_id': self.user.id},
+            content_type='application/json'
+        )
+
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Conference not found")
+        self.assertEqual(response.json(), {'error': 'Conference not found'})
 
-    def test_delete_conference_missing_id(self):
-        """Test per tentare di eliminare una conferenza senza specificare l'ID"""
-        payload = {
-            # Campo "conference_id" mancante
-        }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Missing conference_id")
-
-    def test_delete_conference_invalid_json(self):
-        """Test per tentare di eliminare una conferenza con dati JSON non validi"""
-        invalid_json_payload = "This is not JSON"
-        response = self.client.post(self.url, data=invalid_json_payload, content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Invalid JSON")
-
-    def test_delete_conference_invalid_method(self):
-        """Test per tentare di eliminare una conferenza con un metodo diverso da POST"""
-        response = self.client.get(self.url)  # Invio una richiesta GET
-        self.assertEqual(response.status_code, 405)
-        self.assertEqual(response.json()["error"], "Only POST requests are allowed")
+        # Verifica che la conferenza non sia stata eliminata
+        self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())

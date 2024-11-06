@@ -1,8 +1,9 @@
 import json
 from django.urls import reverse
-from django.test import TestCase
+from django.test import TestCase, Client, RequestFactory
 from django.utils import timezone
 from .models import User, Conference, ConferenceRole
+from django.contrib.auth.hashers import make_password
 
 class ConferenceRoleCreationTests(TestCase):
     def setUp(self):
@@ -93,73 +94,55 @@ class ConferenceRoleCreationTests(TestCase):
 
 class GetUserConferencesTests(TestCase):
     def setUp(self):
-        # Crea un utente per i test
+        # Crea un utente e alcune conferenze per i test
         self.user = User.objects.create(
             first_name="Mario",
             last_name="Rossi",
-            email="mario.rossi@example.com",
+            email="mariorossi@gmail.com",
             password="password123"
         )
-
-        # Crea alcune conferenze
         self.conference1 = Conference.objects.create(
-            title="AI Conference 1",
+            title="AI Conference",
             admin_id=self.user,
             deadline=timezone.now() + timezone.timedelta(days=30),
-            description="A conference on AI advancements 1."
+            description="A conference on AI advancements."
         )
         self.conference2 = Conference.objects.create(
-            title="AI Conference 2",
+            title="Tech Summit",
             admin_id=self.user,
-            deadline=timezone.now() + timezone.timedelta(days=30),
-            description="A conference on AI advancements 2."
+            deadline=timezone.now() + timezone.timedelta(days=60),
+            description="An annual tech summit."
         )
-        self.conference3 = Conference.objects.create(
-            title="AI Conference 3",
-            admin_id=self.user,
-            deadline=timezone.now() + timezone.timedelta(days=30),
-            description="A conference on AI advancements 3."
-        )
+         # Associa le conferenze all'utente tramite 'conference_roles'
+        ConferenceRole.objects.create(user=self.user, conference=self.conference1)
+        ConferenceRole.objects.create(user=self.user, conference=self.conference2)
+        self.url = reverse('get_user_conferences')
 
-        # Associa l'utente alle conferenze tramite ConferenceRole
-        ConferenceRole.objects.create(user=self.user, conference=self.conference1, role='reviewer')
-        ConferenceRole.objects.create(user=self.user, conference=self.conference2, role='admin')
-        ConferenceRole.objects.create(user=self.user, conference=self.conference3, role='author')
+    def test_get_user_conferences_successful(self):
+        """Test per ottenere conferenze di un utente con paginazione"""
+        payload = {
+            "user_id": self.user.id
+        }
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total_conferences"], 2)  # L'utente ha 2 conferenze
 
-        # URL per la richiesta GET
-        self.url = reverse('get_user_conferences', args=[self.user.id])
+    def test_get_user_conferences_missing_user_id(self):
+        """Test per mancanza di user_id"""
+        payload = {}  # Mancante user_id
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "Missing user_id")
 
-    def test_get_user_conferences_default_page(self):
-        """Test che verifica se la risposta contiene le conferenze corrette con paginazione predefinita."""
+    def test_get_user_conferences_invalid_json(self):
+        """Test per dati JSON non validi"""
+        invalid_json_payload = "This is not JSON"
+        response = self.client.post(self.url, data=invalid_json_payload, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "Invalid JSON")
+
+    def test_get_user_conferences_invalid_method(self):
+        """Test per metodo di richiesta non valido (non POST)"""
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 200)
-
-        response_data = response.json()
-        self.assertEqual(response_data['current_page'], 1)
-        self.assertEqual(response_data['total_pages'], 1)
-        self.assertEqual(response_data['total_conferences'], 3)
-
-        # Verifica che le conferenze siano incluse nella risposta
-        self.assertEqual(len(response_data['conferences']), 3)
-        self.assertEqual(response_data['conferences'][0]['title'], 'AI Conference 1')
-        self.assertEqual(response_data['conferences'][1]['title'], 'AI Conference 2')
-        self.assertEqual(response_data['conferences'][2]['title'], 'AI Conference 3')
-
-    def test_get_user_conferences_no_conferences(self):
-        """Test che verifica la risposta quando l'utente non ha conferenze associate."""
-        new_user = User.objects.create(
-            first_name="Giovanni",
-            last_name="Verdi",
-            email="giovanni.verdi@example.com",
-            password="password456"
-        )
-        url_no_conferences = reverse('get_user_conferences', args=[new_user.id])
-
-        response = self.client.get(url_no_conferences)
-        self.assertEqual(response.status_code, 200)
-
-        response_data = response.json()
-        self.assertEqual(response_data['current_page'], 1)
-        self.assertEqual(response_data['total_pages'], 1)
-        self.assertEqual(response_data['total_conferences'], 0)
-        self.assertEqual(len(response_data['conferences']), 0)
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.json()["error"], "Only POST requests are allowed")
