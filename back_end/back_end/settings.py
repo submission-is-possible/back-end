@@ -39,7 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'users',
-    'conference'
+    'conference',
+    'conference_roles',
 ]
 
 MIDDLEWARE = [
