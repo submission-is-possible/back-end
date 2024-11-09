@@ -69,6 +69,7 @@ Content-Type: application/json
     "user_id": 1
 }
 '''
+@csrf_exempt
 def get_user_conferences(request):
     """Restituisce una lista di conferenze di cui l'utente fa parte con paginazione."""
 
@@ -91,8 +92,9 @@ def get_user_conferences(request):
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
 
-    # Filtra le conferenze a cui l'utente specificato partecipa
-    conferences = Conference.objects.filter(conference_roles__user_id=user_id)
+    # Filtra i ruoli conferenza per l'utente specificato e ottieni le conferenze collegate
+    user_conferences = ConferenceRole.objects.filter(user_id=user_id).select_related('conference')
+    conferences = [role.conference for role in user_conferences]
 
     # Applica la paginazione
     paginator = Paginator(conferences, page_size)
