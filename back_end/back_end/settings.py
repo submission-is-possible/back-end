@@ -40,7 +40,7 @@ INSTALLED_APPS = [
   
     'corsheaders',
     'rest_framework',   
-    'drf_yasg'
+    'drf_yasg',
   
     'users',
     'conference',
