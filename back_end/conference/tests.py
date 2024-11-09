@@ -2,6 +2,8 @@ import json
 from django.urls import reverse
 from django.utils import timezone
 from django.test import TestCase, Client
+from rest_framework.test import APITestCase
+
 from .models import User, Conference
 from conference_roles.models import ConferenceRole
 
@@ -65,9 +67,9 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_invalid_method(self):
         """Test per metodo di richiesta non valido (non POST)"""
-        response = self.client.get(self.url)  # Invio una richiesta GET
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertEqual(response.json()["error"], "Only POST requests are allowed")
+        self.assertEqual(response.json()["detail"], "Method \"GET\" not allowed.")
 
 
 class DeleteConferenceTestCase(TestCase):
@@ -189,3 +191,7 @@ class DeleteConferenceTestCase(TestCase):
 
         # Verifica che la conferenza non sia stata eliminata
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------- #
+#                       tests for edit_conference:

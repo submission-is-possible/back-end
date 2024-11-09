@@ -55,11 +55,13 @@ class CreateUserTestCase(TestCase):
 
     def test_create_user_invalid_method(self):
         """Test errore per metodo non POST."""
-        response = self.client.get(self.url)  # Usa GET invece di POST
-
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertIn('error', response.json())
-        self.assertEqual(response.json()['error'], 'Only POST requests are allowed')
+        self.assertIn('detail', response.json())
+        self.assertEqual(response.json()['detail'], 'Method "GET" not allowed.')
+
+
+
 
 class LoginUserTestCase(TestCase):
     def setUp(self):
@@ -107,4 +109,4 @@ class LoginUserTestCase(TestCase):
     def test_login_invalid_method(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertIn('Only POST requests are allowed', response.json().get("error"))
+        self.assertEqual(response.json()['detail'], 'Method "GET" not allowed.')
