@@ -34,20 +34,27 @@ import json
 def create_paper(request):
     if request.method == 'POST':
         try:
-            data = json.loads(request.body)
-            title = data.get('title')
-            paper_file = data.get('paper_file')
-            author_id = data.get('author_id')
-            conference_id = data.get('conference_id')
+            # Get data from POST request
+            title = request.POST.get('title')
+            paper_file = request.FILES.get('paper_file')
+            
+            # Convert ID strings to integers
+            try:
+                author_id = int(request.POST.get('author_id'))
+                conference_id = int(request.POST.get('conference_id'))
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Invalid ID format'}, status=400)
 
-            if not (title and author_id and conference_id):
+            if not all([title, paper_file, author_id, conference_id]):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
 
+            # Check if author exists
             try:
                 author = User.objects.get(id=author_id)
             except User.DoesNotExist:
                 return JsonResponse({'error': 'Author not found'}, status=404)
 
+            # Check if conference exists
             try:
                 conference = Conference.objects.get(id=conference_id)
             except Conference.DoesNotExist:
@@ -60,9 +67,11 @@ def create_paper(request):
                 conference=conference,
                 status='submitted'
             )
+            
             return JsonResponse({
                 'message': 'Paper added successfully',
                 'paper_id': paper.id
             }, status=201)
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSONMissing fields or request body is not valid JSON'}, status=400)
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
