@@ -71,7 +71,7 @@ Content-Type: application/json
 '''
 @csrf_exempt
 def get_user_conferences(request):
-    """Restituisce una lista di conferenze di cui l'utente fa parte con paginazione."""
+    """Restituisce una lista di conferenze di cui l'utente è amministratore con paginazione."""
 
     # Verifica che la richiesta sia POST
     if request.method != 'POST':
@@ -92,9 +92,8 @@ def get_user_conferences(request):
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
 
-    # Filtra i ruoli conferenza per l'utente specificato e ottieni le conferenze collegate
-    user_conferences = ConferenceRole.objects.filter(user_id=user_id).select_related('conference')
-    conferences = [role.conference for role in user_conferences]
+    # Filtra le conferenze in cui l'utente è amministratore
+    conferences = Conference.objects.filter(admin_id_id=user_id)
 
     # Applica la paginazione
     paginator = Paginator(conferences, page_size)
