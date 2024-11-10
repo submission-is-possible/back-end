@@ -68,6 +68,32 @@ Content-Type: application/json
 {
     "user_id": 1
 }
+
+esempio risposta
+{
+    "current_page": 2,
+    "total_pages": 3,
+    "total_conferences": 25,
+    "conferences": [
+        {
+            "id": 1,
+            "title": "Conference 1",
+            "description": "Description 1",
+            "created_at": "2021-01-01T00:00:00",
+            "deadline": "2021-06-01T00:00:00",
+            "roles": ["admin", "author"]
+        },
+        {
+            "id": 2,
+            "title": "Conference 2",
+            "description": "Description 2",
+            "created_at": "2021-02-01T00:00:00",
+            "deadline": "2021-07-01T00:00:00",
+            "roles": ["reviewer"]
+        },
+        ...
+    ]
+}
 '''
 @csrf_exempt
 def get_user_conferences(request):
@@ -94,10 +120,24 @@ def get_user_conferences(request):
 
     # Filtra i ruoli conferenza per l'utente specificato e ottieni le conferenze collegate
     user_conferences = ConferenceRole.objects.filter(user_id=user_id).select_related('conference')
-    conferences = [role.conference for role in user_conferences]
+
+    # Crea una struttura dati per organizzare conferenze e ruoli
+    conferences_dict = {}
+    for role in user_conferences:
+        conference_id = role.conference.id
+        if conference_id not in conferences_dict:
+            conferences_dict[conference_id] = {
+                "id": role.conference.id,
+                "title": role.conference.title,
+                "description": role.conference.description,
+                "created_at": role.conference.created_at.isoformat(),
+                "deadline": role.conference.deadline.isoformat(),
+                "roles": []
+            }
+        conferences_dict[conference_id]["roles"].append(role.role)
 
     # Applica la paginazione
-    paginator = Paginator(conferences, page_size)
+    paginator = Paginator(list(conferences_dict.values()), page_size)
     page_obj = paginator.get_page(page_number)
 
     # Crea la risposta con le conferenze per la pagina corrente
@@ -105,15 +145,6 @@ def get_user_conferences(request):
         "current_page": page_obj.number,
         "total_pages": paginator.num_pages,
         "total_conferences": paginator.count,
-        "conferences": [
-            {
-                "id": conference.id,
-                "title": conference.title,
-                "description": conference.description,
-                "created_at": conference.created_at.isoformat(),
-                "deadline": conference.deadline.isoformat(),
-            }
-            for conference in page_obj
-        ],
+        "conferences": list(page_obj)
     }
     return JsonResponse(response_data, status=200)
