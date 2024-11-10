@@ -44,7 +44,7 @@ urlpatterns = [
     path('conference_roles/', include('conference_roles.urls')),
     path('papers/', include('papers.urls')),
     #path('create_user', views.create_user, name='create_user'),
-
+    path('notifications/', include('notifications.urls')),
     #Swagger and Redoc paths for accessing documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

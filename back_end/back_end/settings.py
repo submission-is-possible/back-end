@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'conference',
     'conference_roles',
     'papers',
+    'notifications',
 ]
 
 MIDDLEWARE = [
