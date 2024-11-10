@@ -2,6 +2,8 @@ import json
 from django.urls import reverse
 from django.utils import timezone
 from django.test import TestCase, Client
+from rest_framework.test import APITestCase
+
 from .models import User, Conference
 from conference_roles.models import ConferenceRole
 
@@ -65,9 +67,9 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_invalid_method(self):
         """Test per metodo di richiesta non valido (non POST)"""
-        response = self.client.get(self.url)  # Invio una richiesta GET
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertEqual(response.json()["error"], "Only POST requests are allowed")
+        self.assertEqual(response.json()["detail"], "Method \"GET\" not allowed.")
 
 
 class DeleteConferenceTestCase(TestCase):
@@ -189,3 +191,136 @@ class DeleteConferenceTestCase(TestCase):
 
         # Verifica che la conferenza non sia stata eliminata
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
+
+
+
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------- #
+#                       tests for edit_conference:
+
+
+class EditConferenceTest(TestCase):
+    def setUp(self):
+        # Crea un utente e una conferenza di prova
+        self.client = Client()
+        self.user_admin = User.objects.create(first_name="Admin", last_name="User", email="admin@example.com",
+                                              password="adminpass")
+        self.user_non_admin = User.objects.create(first_name="NonAdmin", last_name="User", email="nonadmin@example.com",
+                                                  password="nonadminpass")
+        self.conference = Conference.objects.create(
+            title="Test Conference",
+            admin_id=self.user_admin,
+            created_at=timezone.now(),
+            deadline=timezone.now() + timezone.timedelta(days=10),
+            description="Conference description"
+        )
+
+        # Assegna il ruolo di admin all'utente admin
+        ConferenceRole.objects.create(user=self.user_admin, conference=self.conference, role='admin')
+
+    def test_edit_conference_successful(self):
+        # Modifica con dati validi da un utente admin
+        response = self.client.patch(
+            reverse('edit_conference'),  # Assicurati che il nome dell'URL sia corretto
+            data=json.dumps({
+                'conference_id': self.conference.id,
+                'user_id': self.user_admin.id,
+                'title': 'Updated Conference Title',
+                'description': 'Updated description',
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.conference.refresh_from_db()
+        self.assertEqual(self.conference.title, 'Updated Conference Title')
+        self.assertEqual(self.conference.description, 'Updated description')
+
+    def test_edit_conference_permission_denied(self):
+        # Attempt a modification by a non-admin user
+        response = self.client.patch(
+            reverse('edit_conference'),
+            data=json.dumps({
+                'conference_id': self.conference.id,
+                'user_id': self.user_non_admin.id,
+                'title': 'Should Not Update',
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 403)
+
+        # Attempt to retrieve JSON content and verify 'error' key
+        try:
+            response_data = response.json()
+        except ValueError:
+            self.fail("Response did not return valid JSON content")
+
+        # Check that 'error' key is present and contains the correct message
+        self.assertIn('error', response_data, "Expected 'error' key in response")
+        self.assertIn('Permission denied', response_data['error'])
+
+    def test_edit_conference_not_found(self):
+        # Conferenza con ID inesistente
+        response = self.client.patch(
+            reverse('edit_conference'),
+            data=json.dumps({
+                'conference_id': 9999,  # ID inesistente
+                'user_id': self.user_admin.id,
+                'title': 'Should Not Update',
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('Conference not found', response.json().get('error'))
+
+    def test_edit_conference_missing_conference_id(self):
+        # Richiesta senza `conference_id`
+        response = self.client.patch(
+            reverse('edit_conference'),
+            data=json.dumps({
+                'user_id': self.user_admin.id,
+                'title': 'No Conference ID',
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Missing conference_id', response.json().get('error'))
+
+    def test_edit_conference_missing_user_id(self):
+        # Richiesta senza `user_id`
+        response = self.client.patch(
+            reverse('edit_conference'),
+            data=json.dumps({
+                'conference_id': self.conference.id,
+                'title': 'No User ID',
+            }),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Missing user_id', response.json().get('error'))
+
+    def test_edit_conference_method_not_allowed(self):
+        # Attempt to modify using a method other than PATCH
+        response = self.client.post(
+            reverse('edit_conference'),
+            data=json.dumps({
+                'conference_id': self.conference.id,
+                'user_id': self.user_admin.id,
+                'title': 'Should Not Update',
+            }),
+            content_type="application/json"
+        )
+
+        # Assert that the status code is 405
+        self.assertEqual(response.status_code, 405)
+
+        # Check that the response contains 'detail' rather than 'error'
+        response_data = response.json()
+        self.assertIsInstance(response_data, dict)  # Check if response is a dictionary
+        self.assertIn('detail', response_data)  # Ensure 'detail' key is present
+        self.assertEqual(response_data['detail'], 'Method "POST" not allowed.')  # Check specific message returned by DRF
+        '''
+        Or instead of the last lines we can use the following, to add flexibility to the test:
+        self.assertIn('Method', response_data['detail'])
+        self.assertIn('not allowed', response_data['detail'])
+        '''
