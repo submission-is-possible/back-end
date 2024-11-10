@@ -70,6 +70,14 @@ def create_conference(request):
                 deadline=deadline,
                 description=description
             )
+
+            # Crea il ruolo di amministratore per l'utente, crea la tupla nella tabella ConferenceRole
+            ConferenceRole.objects.create(
+                user=admin_user,
+                conference=conference,
+                role='admin'
+            )
+            print("sono qui")
             return JsonResponse({
                 'message': 'Conference created successfully',
                 'conference_id': conference.id
@@ -88,17 +96,19 @@ def create_conference(request):
 @csrf_exempt
 @swagger_auto_schema(
     method='post',
-    operation_description="Delete a conference by providing the conference_id.",
+    operation_description="Delete a conference by providing the conference_id and user_id.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete'),
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user requesting the deletion')
         },
-        required=['conference_id']
+        required=['conference_id', 'user_id']
     ),
     responses={
         200: openapi.Response(description="Conference deleted successfully"),
-        400: openapi.Response(description="Missing conference_id or request body is not valid JSON"),
+        400: openapi.Response(description="Missing conference_id or user_id, or request body is not valid JSON"),
+        403: openapi.Response(description="Permission denied. User is not an admin of this conference."),
         404: openapi.Response(description="Conference not found"),
         405: openapi.Response(description="Only POST requests are allowed"),
     }
@@ -109,7 +119,8 @@ def delete_conference(request):
         try:
             data = json.loads(request.body)
             conference_id = data.get('conference_id')
-            user_id = data.get('user_id')  # Supponiamo che `user_id` sia passato nella richiesta
+            user_id = data.get('user_id')  #`user_id` deve essere fornito per verificare i permessi dell'utente,
+            # se l'utente è admin della conferenza, può eliminarla
 
             # Verifica che l'ID della conferenza e l'ID utente siano forniti
             if not conference_id:
@@ -127,6 +138,9 @@ def delete_conference(request):
 
                 if not is_admin:
                     return JsonResponse({'error': 'Permission denied. User is not an admin of this conference.'}, status=403)
+
+                # Elimina tutti i ruoli associati alla conferenza in ConferenceRole
+                ConferenceRole.objects.filter(conference=conference).delete()
 
                 # Elimina la conferenza se l'utente è admin
                 conference.delete()
