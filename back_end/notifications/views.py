@@ -6,7 +6,8 @@ from django.utils import timezone
 from users.models import User
 from .models import Notification
 from rest_framework.decorators import api_view
-
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
 '''esempio richiesta post per creare una notifica
 {
@@ -18,6 +19,27 @@ from rest_framework.decorators import api_view
 }
 '''
 @csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Create a new notification.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'id_user1': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user sending the notification'),
+            'id_user2': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user receiving the notification'),
+            'type': openapi.Schema(type=openapi.TYPE_STRING, description='Type of the notification'),
+            'title': openapi.Schema(type=openapi.TYPE_STRING, description='Title of the notification'),
+            'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the notification')
+        },
+        required=['id_user1', 'id_user2', 'type', 'title', 'description']
+    ),
+    responses={
+        201: openapi.Response(description="Notification created successfully"),
+        400: openapi.Response(description="Missing required fields or invalid JSON"),
+        404: openapi.Response(description="One or both users not found"),
+        405: openapi.Response(description="Only POST requests are allowed")
+    }
+)
 @api_view(['POST'])
 def create_notification(request):
     if request.method == 'POST':
@@ -57,6 +79,25 @@ def create_notification(request):
 
 
 @csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Get notifications for a specific user.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user'),
+            'page': openapi.Schema(type=openapi.TYPE_INTEGER, description='Page number (optional, default 1)'),
+            'page_size': openapi.Schema(type=openapi.TYPE_INTEGER, description='Page size (optional, default 10)')
+        },
+        required=['user_id']
+    ),
+    responses={
+        200: openapi.Response(description="List of notifications for the user"),
+        400: openapi.Response(description="Missing user_id parameter or invalid JSON"),
+        404: openapi.Response(description="User not found"),
+        405: openapi.Response(description="Only POST requests are allowed")
+    }
+)
 @api_view(['POST'])
 def get_notifications(request):
     """
@@ -118,6 +159,23 @@ def get_notifications(request):
 
 
 @csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Mark a notification as read.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'notification_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification to mark as read')
+        },
+        required=['notification_id']
+    ),
+    responses={
+        200: openapi.Response(description="Notification marked as read"),
+        400: openapi.Response(description="Missing notification_id or invalid JSON"),
+        404: openapi.Response(description="Notification not found"),
+        405: openapi.Response(description="Only POST requests are allowed")
+    }
+)
 @api_view(['POST'])
 def mark_as_read(request):
     """
@@ -152,6 +210,23 @@ def mark_as_read(request):
 
 
 @csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Delete a notification.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'notification_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification to delete')
+        },
+        required=['notification_id']
+    ),
+    responses={
+        200: openapi.Response(description="Notification deleted successfully"),
+        400: openapi.Response(description="Missing notification_id or invalid JSON"),
+        404: openapi.Response(description="Notification not found"),
+        405: openapi.Response(description="Only POST requests are allowed")
+    }
+)
 @api_view(['POST'])
 def delete_notification(request):
     """
