@@ -8,98 +8,99 @@ from .models import Notification
 from rest_framework.decorators import api_view
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from conference.models import Conference
 
-'''esempio richiesta post per creare una notifica
-{
-    "id_user1": 1,           # utente che invia la notifica
-    "id_user2": 2,           # utente che riceve la notifica
-    "type": "invited_as_reviewer",
-    "title": "Richiesta di revisione",
-    "description": "Hai ricevuto una richiesta di revisione per la conferenza X"
-}
-'''
-@csrf_exempt
+
+@api_view(['POST'])
 @swagger_auto_schema(
     method='post',
     operation_description="Create a new notification.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
-            'id_user1': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user sending the notification'),
-            'id_user2': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user receiving the notification'),
-            'type': openapi.Schema(type=openapi.TYPE_STRING, description='Type of the notification'),
-            'title': openapi.Schema(type=openapi.TYPE_STRING, description='Title of the notification'),
-            'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the notification')
+            'user_sender': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user sending the notification'),
+            'user_receiver': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user receiving the notification'),
+            'conference': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
+            'type': openapi.Schema(type=openapi.TYPE_INTEGER, description='Type of the notification')
         },
-        required=['id_user1', 'id_user2', 'type', 'title', 'description']
+        required=['user_sender', 'user_receiver', 'conference', 'type']
     ),
     responses={
         201: openapi.Response(description="Notification created successfully"),
-        400: openapi.Response(description="Missing required fields or invalid JSON"),
-        404: openapi.Response(description="One or both users not found"),
+        400: openapi.Response(description="Missing fields or invalid JSON"),
+        404: openapi.Response(description="User or conference not found"),
         405: openapi.Response(description="Only POST requests are allowed")
     }
 )
-@api_view(['POST'])
+@csrf_exempt
 def create_notification(request):
     if request.method == 'POST':
         try:
+            # Estrai i dati dal body della richiesta
             data = json.loads(request.body)
+            user_sender_id = data.get('user_sender')
+            user_receiver_id = data.get('user_receiver')
+            conference_id = data.get('conference')
+            notification_type = data.get('type')
 
-            # Verifica presenza campi obbligatori
-            required_fields = ['id_user1', 'id_user2', 'type', 'title', 'description']
-            if not all(field in data for field in required_fields):
-                return JsonResponse({'error': 'Missing required fields'}, status=400)
+            # Verifica che i campi richiesti siano presenti
+            if not (user_sender_id and user_receiver_id and conference_id and notification_type is not None):
+                return JsonResponse({'error': 'Missing fields'}, status=400)
 
-            # Verifica esistenza utenti
+            # Verifica se gli utenti esistono
             try:
-                user1 = User.objects.get(id=data['id_user1'])
-                user2 = User.objects.get(id=data['id_user2'])
+                user_sender = User.objects.get(id=user_sender_id)
             except User.DoesNotExist:
-                return JsonResponse({'error': 'One or both users not found'}, status=404)
+                return JsonResponse({'error': 'User sender not found'}, status=404)
 
-            # Crea la notifica
+            try:
+                user_receiver = User.objects.get(id=user_receiver_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User receiver not found'}, status=404)
+
+            # Verifica se la conferenza esiste
+            try:
+                conference = Conference.objects.get(id=conference_id)
+            except Conference.DoesNotExist:
+                return JsonResponse({'error': 'Conference not found'}, status=404)
+
+            # Crea la nuova notifica
             notification = Notification.objects.create(
-                id_user1=user1,
-                id_user2=user2,
-                type=data['type'],
-                title=data['title'],
-                description=data['description']
+                user_sender=user_sender,
+                user_receiver=user_receiver,
+                conference=conference,
+                status=0,  # Setta lo stato a 'pending' di default
+                type=notification_type,
+                created_at=timezone.now()
             )
 
             return JsonResponse({
                 'message': 'Notification created successfully',
                 'notification_id': notification.id
             }, status=201)
-
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
-
-@csrf_exempt
+@api_view(['POST'])
 @swagger_auto_schema(
     method='post',
-    operation_description="Get notifications for a specific user.",
+    operation_description="Get a list of notifications received by the user with pagination.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user'),
-            'page': openapi.Schema(type=openapi.TYPE_INTEGER, description='Page number (optional, default 1)'),
-            'page_size': openapi.Schema(type=openapi.TYPE_INTEGER, description='Page size (optional, default 10)')
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user receiving the notifications')
         },
         required=['user_id']
     ),
     responses={
-        200: openapi.Response(description="List of notifications for the user"),
-        400: openapi.Response(description="Missing user_id parameter or invalid JSON"),
+        200: openapi.Response(description="Notifications found"),
+        400: openapi.Response(description="Missing fields or invalid JSON"),
         404: openapi.Response(description="User not found"),
         405: openapi.Response(description="Only POST requests are allowed")
     }
 )
-@api_view(['POST'])
-#swagger
 @csrf_exempt
 def get_notifications_received(request):
     """Restituisce una lista di notifiche ricevute dall'utente con paginazione."""
@@ -123,8 +124,8 @@ def get_notifications_received(request):
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
 
-    # Filtra le notifiche ricevute per l'utente specificato
-    notifications = Notification.objects.filter(user_receiver_id=user_id).select_related('user_sender', 'conference')
+    # Filtra le notifiche ricevute per l'utente specificato e ordinale per data di creazione
+    notifications = Notification.objects.filter(user_receiver_id=user_id).select_related('user_sender','conference').order_by('-created_at')
 
     # Applica la paginazione
     paginator = Paginator(notifications, page_size)
@@ -156,62 +157,13 @@ def get_notifications_received(request):
                     "deadline": notification.conference.deadline.isoformat()
                 },
                 "status": notification.get_status_display(),
-                "type": notification.get_type_display()
+                "type": notification.get_type_display(),
+                "created_at": notification.created_at.isoformat()
             }
             for notification in page_obj
         ]
     }
     return JsonResponse(response_data, status=200)
-
-@csrf_exempt
-@swagger_auto_schema(
-    method='post',
-    operation_description="Mark a notification as read.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'notification_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification to mark as read')
-        },
-        required=['notification_id']
-    ),
-    responses={
-        200: openapi.Response(description="Notification marked as read"),
-        400: openapi.Response(description="Missing notification_id or invalid JSON"),
-        404: openapi.Response(description="Notification not found"),
-        405: openapi.Response(description="Only POST requests are allowed")
-    }
-)
-@api_view(['POST'])
-def mark_as_read(request):
-    """
-    Marca una notifica come letta.
-    Struttura JSON richiesta:
-    {
-        "notification_id": 1
-    }
-    """
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            notification_id = data.get('notification_id')
-
-            if not notification_id:
-                return JsonResponse({'error': 'Missing notification_id'}, status=400)
-
-            try:
-                notification = Notification.objects.get(id=notification_id)
-                notification.read = True
-                notification.save()
-
-                return JsonResponse({'message': 'Notification marked as read'})
-
-            except Notification.DoesNotExist:
-                return JsonResponse({'error': 'Notification not found'}, status=404)
-
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    else:
-        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
 @csrf_exempt
@@ -221,43 +173,115 @@ def mark_as_read(request):
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
-            'notification_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification to delete')
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user'),
+            'id_notification': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification')
         },
-        required=['notification_id']
+        required=['user_id', 'id_notification']
     ),
     responses={
         200: openapi.Response(description="Notification deleted successfully"),
-        400: openapi.Response(description="Missing notification_id or invalid JSON"),
-        404: openapi.Response(description="Notification not found"),
+        400: openapi.Response(description="Missing fields or invalid JSON"),
+        404: openapi.Response(description="User or notification not found"),
         405: openapi.Response(description="Only POST requests are allowed")
     }
 )
 @api_view(['POST'])
 def delete_notification(request):
-    """
-    Elimina una notifica.
-    Struttura JSON richiesta:
-    {
-        "notification_id": 1
-    }
-    """
     if request.method == 'POST':
         try:
+            # Estrai i dati dal body della richiesta
             data = json.loads(request.body)
-            notification_id = data.get('notification_id')
+            user_id = data.get('user_id')
+            notification_id = data.get('id_notification')
 
-            if not notification_id:
-                return JsonResponse({'error': 'Missing notification_id'}, status=400)
+            # Verifica che i campi richiesti siano presenti
+            if not (user_id and notification_id):
+                return JsonResponse({'error': 'Missing fields'}, status=400)
 
+            # Verifica se l'utente esiste
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User not found'}, status=404)
+
+            # Verifica se la notifica esiste e appartiene all'utente
+            try:
+                notification = Notification.objects.get(id=notification_id, user_receiver=user)
+            except Notification.DoesNotExist:
+                return JsonResponse({'error': 'Notification not found or does not belong to the user'}, status=404)
+
+            # Elimina la notifica
+            notification.delete()
+
+            return JsonResponse({'message': 'Notification deleted successfully'}, status=200)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+
+
+@csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Update the status of a notification.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'id_notification': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification'),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New status of the notification')
+        },
+        required=['id_notification', 'status']
+    ),
+    responses={
+        200: openapi.Response(description="Notification updated successfully"),
+        400: openapi.Response(description="Missing fields, invalid JSON, or invalid status value"),
+        404: openapi.Response(description="Notification not found"),
+        405: openapi.Response(description="Only POST requests are allowed")
+    }
+)
+@api_view(['POST'])
+def update_notification(request):
+    if request.method == 'POST':
+        try:
+            # Estrai i dati dal body della richiesta
+            data = json.loads(request.body)
+            notification_id = data.get('id_notification')
+            status = data.get('status')
+
+            # Verifica che i campi richiesti siano presenti
+            if not (notification_id and status):
+                return JsonResponse({'error': 'Missing fields'}, status=400)
+
+            # Mappa dei valori di status dalle stringhe ai valori numerici
+            status_mapping = {
+                'accept': 1,
+                'reject': -1
+            }
+
+            # Verifica se il valore dello status è valido
+            if status not in status_mapping:
+                return JsonResponse({'error': 'Invalid status value'}, status=400)
+
+            # Verifica se la notifica esiste
             try:
                 notification = Notification.objects.get(id=notification_id)
-                notification.delete()
-
-                return JsonResponse({'message': 'Notification deleted successfully'})
-
             except Notification.DoesNotExist:
                 return JsonResponse({'error': 'Notification not found'}, status=404)
 
+            # Inverti mittente e destinatario
+            user_sender = notification.user_sender
+            user_receiver = notification.user_receiver
+            notification.user_sender = user_receiver
+            notification.user_receiver = user_sender
+
+            # Aggiorna lo status
+            notification.status = status_mapping[status]
+
+            # Salva le modifiche
+            notification.save()
+
+            return JsonResponse({'message': 'Notification updated successfully'}, status=200)
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
