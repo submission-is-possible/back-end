@@ -42,6 +42,7 @@ urlpatterns = [
     path('users/', include('users.urls')),
     path('conference/', include('conference.urls')),
     path('conference_roles/', include('conference_roles.urls')),
+    path('papers/', include('papers.urls')),
     #path('create_user', views.create_user, name='create_user'),
     path('notifications/', include('notifications.urls')),
     #Swagger and Redoc paths for accessing documentation

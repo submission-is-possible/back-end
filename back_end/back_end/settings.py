@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'users',
     'conference',
     'conference_roles',
+    'papers',
     'notifications',
 ]
 
