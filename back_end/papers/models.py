@@ -12,8 +12,8 @@ class Paper(models.Model):
     title = models.CharField(max_length=200)
     paper_file = models.FileField(upload_to='papers_pdf/', null=True, blank=True)
     conference = models.ForeignKey(Conference, on_delete=models.CASCADE, related_name="papers")
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="papers")
-    status = models.CharField(max_length=20, choices=STATUS)
+    author_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name="papers")
+    status_id = models.CharField(max_length=20, choices=STATUS)
 
     def str(self):
         return f"{self.title} - {self.author} - {self.conference.title} ({self.status})"
