@@ -99,64 +99,69 @@ def create_notification(request):
     }
 )
 @api_view(['POST'])
-def get_notifications(request):
-    """
-    Recupera le notifiche per un utente specifico.
-    Struttura JSON richiesta:
-    {
-        "user_id": 1,
-        "page": 1,        # opzionale, default 1
-        "page_size": 10   # opzionale, default 10
-    }
-    """
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            user_id = data.get('user_id')
+#swagger
+@csrf_exempt
+def get_notifications_received(request):
+    """Restituisce una lista di notifiche ricevute dall'utente con paginazione."""
 
-            if not user_id:
-                return JsonResponse({'error': 'Missing user_id parameter'}, status=400)
+    # Verifica che la richiesta sia POST
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
-            # Verifica esistenza utente
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                return JsonResponse({'error': 'User not found'}, status=404)
+    # Parse del corpo della richiesta per ottenere user_id
+    try:
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-            page_number = data.get('page', 1)
-            page_size = data.get('page_size', 10)
+    # Verifica che user_id sia fornito
+    if not user_id:
+        return JsonResponse({"error": "Missing user_id"}, status=400)
 
-            # Ottiene le notifiche dell'utente
-            notifications = Notification.objects.filter(id_user2=user_id).order_by('-creation_date')
+    # Estrai il numero di pagina e il limite per la paginazione dai parametri della richiesta
+    page_number = request.GET.get('page', 1)
+    page_size = request.GET.get('page_size', 20)
 
-            # Applica paginazione
-            paginator = Paginator(notifications, page_size)
-            page_obj = paginator.get_page(page_number)
+    # Filtra le notifiche ricevute per l'utente specificato
+    notifications = Notification.objects.filter(user_receiver_id=user_id).select_related('user_sender', 'conference')
 
-            response_data = {
-                "current_page": page_obj.number,
-                "total_pages": paginator.num_pages,
-                "total_notifications": paginator.count,
-                "notifications": [
-                    {
-                        "id": notif.id,
-                        "sender": notif.id_user1.id,
-                        "type": notif.type,
-                        "title": notif.title,
-                        "description": notif.description,
-                        "creation_date": notif.creation_date.isoformat(),
-                        "read": notif.read
-                    }
-                    for notif in page_obj
-                ]
+    # Applica la paginazione
+    paginator = Paginator(notifications, page_size)
+    page_obj = paginator.get_page(page_number)
+
+    # Crea la risposta con le notifiche per la pagina corrente
+    response_data = {
+        "current_page": page_obj.number,
+        "total_pages": paginator.num_pages,
+        "total_notifications": paginator.count,
+        "notifications": [
+            {
+                "id": notification.id,
+                "user_sender": {
+                    "id": notification.user_sender.id,
+                    "username": notification.user_sender.username,
+                    "email": notification.user_sender.email
+                },
+                "user_receiver": {
+                    "id": notification.user_receiver.id,
+                    "username": notification.user_receiver.username,
+                    "email": notification.user_receiver.email
+                },
+                "conference": {
+                    "id": notification.conference.id,
+                    "title": notification.conference.title,
+                    "description": notification.conference.description,
+                    "created_at": notification.conference.created_at.isoformat(),
+                    "deadline": notification.conference.deadline.isoformat()
+                },
+                "status": notification.get_status_display(),
+                "type": notification.get_type_display()
             }
-            return JsonResponse(response_data)
-
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    else:
-        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
+            for notification in page_obj
+        ]
+    }
+    return JsonResponse(response_data, status=200)
 
 @csrf_exempt
 @swagger_auto_schema(
