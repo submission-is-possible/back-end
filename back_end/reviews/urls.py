@@ -2,5 +2,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    #path('create/', views.create_conference_role, name='create_conference_role'),
+    path('get_user_reviews/', views.get_user_reviews, name='get_user_reviews'),
+    path('get_paper_reviews/', views.get_paper_reviews, name='get_paper_reviews'),
 ]

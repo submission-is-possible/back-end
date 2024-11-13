@@ -86,7 +86,7 @@ def create_conference_role(request):
 
 
 '''  esempio richiesta post
-POST /user/conferences/?page=2&page_size=10
+POST /conference_roles/get_user_conferences/?page=2&page_size=10
 Content-Type: application/json
 {
     "user_id": 1

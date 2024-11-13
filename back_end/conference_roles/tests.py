@@ -90,7 +90,8 @@ class ConferenceRoleCreationTests(TestCase):
         """Test per metodo di richiesta non valido (non POST)"""
         response = self.client.get(self.url)  # Invio una richiesta GET
         self.assertEqual(response.status_code, 405)
-        self.assertEqual(response.json()["error"], "Only POST requests are allowed")
+        self.assertEqual(response.json(), {"detail": "Method \"GET\" not allowed."})  # Modificare il messaggio di errore se necessario
+        #self.assertEqual(response.json(), "Only POST requests are allowed")
 
 class GetUserConferencesTests(TestCase):
     def setUp(self):
@@ -145,4 +146,5 @@ class GetUserConferencesTests(TestCase):
         """Test per metodo di richiesta non valido (non POST)"""
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertEqual(response.json()["error"], "Only POST requests are allowed")
+        #self.assertEqual(response.json()["error"], "Only POST requests are allowed")
+        self.assertEqual(response.json(), {"detail": "Method \"GET\" not allowed."})
