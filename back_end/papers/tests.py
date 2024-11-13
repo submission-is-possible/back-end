@@ -8,6 +8,10 @@ from conference.models import Conference
 import json
 import base64
 from datetime import timedelta
+import os
+import shutil
+from unittest.mock import patch
+from django.conf import settings
 
 class PaperTests(TestCase):
     def setUp(self):
@@ -311,8 +315,86 @@ class ListPapersTests(TestCase):
         paper = data['papers'][0]
         
         required_fields = {
-            'id', 'title', 'paper_file', 'conference_id',
-            'conference_title', 'status_id', 'created_at'
+            'id', 'title', 'paper_file', 'conference',
+            'conference_title', 'status', 'created_at'
         }
         
         self.assertEqual(set(paper.keys()), required_fields)
+
+class ViewPaperPDFTests(TestCase):
+    def setUp(self):
+        """Set up test environment."""
+        self.client = Client()
+        
+        # Create test media directory structure
+        self.test_media_root = os.path.join(settings.BASE_DIR, 'test_media')
+        self.test_papers_dir = os.path.join(self.test_media_root, 'papers', 'paper')
+        os.makedirs(self.test_papers_dir, exist_ok=True)
+        
+        # Create a test PDF file
+        self.test_pdf_content = b"%PDF-1.4\ntest pdf content"
+        self.test_filename = "test_paper.pdf"
+        self.test_filepath = os.path.join(self.test_papers_dir, self.test_filename)
+        
+        with open(self.test_filepath, 'wb') as f:
+            f.write(self.test_pdf_content)
+            
+    def tearDown(self):
+        """Clean up test environment."""
+        # Remove test media directory and all contents
+        if os.path.exists(self.test_media_root):
+            shutil.rmtree(self.test_media_root)
+
+    @patch('django.conf.settings.MEDIA_ROOT', new_callable=lambda: os.path.join(settings.BASE_DIR, 'test_media'))
+    def test_successful_pdf_view(self, mock_media_root):
+        """Test successful PDF file viewing."""
+        response = self.client.get(reverse('view_paper_pdf', args=[self.test_filename]))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Content-Disposition'], f'inline; filename="{self.test_filename}"')
+        self.assertEqual(response['Cache-Control'], 'public, max-age=3600')
+        
+        # Read the streaming content
+        content = b''.join(response.streaming_content)
+        self.assertEqual(content, self.test_pdf_content)
+
+    @patch('django.conf.settings.MEDIA_ROOT', new_callable=lambda: os.path.join(settings.BASE_DIR, 'test_media'))
+    def test_file_not_found(self, mock_media_root):
+        """Test response when PDF file doesn't exist."""
+        response = self.client.get(reverse('view_paper_pdf', args=['nonexistent.pdf']))
+        
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()['error'], 'File not found: nonexistent.pdf')
+
+    @patch('django.conf.settings.MEDIA_ROOT', new_callable=lambda: os.path.join(settings.BASE_DIR, 'test_media'))
+    def test_invalid_file_type(self, mock_media_root):
+        """Test response when file is not a PDF."""
+        # Create a non-PDF file
+        non_pdf_path = os.path.join(self.test_papers_dir, 'test.txt')
+        with open(non_pdf_path, 'w') as f:
+            f.write('test content')
+            
+        response = self.client.get(reverse('view_paper_pdf', args=['test.txt']))
+        
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'Invalid file type')
+
+    @patch('django.conf.settings.MEDIA_ROOT', new_callable=lambda: os.path.join(settings.BASE_DIR, 'test_media'))
+    def test_filename_sanitization(self, mock_media_root):
+        """Test that filenames are properly sanitized."""
+        # Create file with special characters
+        special_filename = 'test!@#$%^&*().pdf'
+        special_filepath = os.path.join(self.test_papers_dir, os.path.basename(special_filename))
+        with open(special_filepath, 'wb') as f:
+            f.write(self.test_pdf_content)
+            
+        response = self.client.get(reverse('view_paper_pdf', args=[special_filename]))
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_invalid_request_method(self):
+        """Test response for non-GET requests."""
+        response = self.client.post(reverse('view_paper_pdf', args=['test.pdf']))
+        self.assertEqual(response.status_code, 405)
