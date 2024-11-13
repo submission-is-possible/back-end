@@ -48,8 +48,6 @@ def create_paper(request):
         author_id = data.get('author')
         conference_id = data.get('conference')
 
-        print(data)
-
         if title is None or author_id is None or conference_id is None:
             return JsonResponse({'error': 'Missing fields'}, status=400)
 

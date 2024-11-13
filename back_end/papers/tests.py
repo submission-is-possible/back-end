@@ -50,9 +50,18 @@ class PaperTests(TestCase):
         self.valid_paper_data = {
             'title': 'Test Paper',
             'paper_file': self.encoded_pdf,
-            'author_id': self.user.id,  # Send just the ID
-            'conference_id': self.conference.id
+            'author': self.user.id,  # Send just the ID
+            'conference': self.conference.id
         }
+
+        # Set up test papers directory
+        self.test_papers_dir = os.path.join(settings.BASE_DIR, 'test_media', 'test_papers')
+        os.makedirs(self.test_papers_dir, exist_ok=True)
+
+        # Mock MEDIA_ROOT for tests
+        self.patcher = patch('django.conf.settings.MEDIA_ROOT', self.test_papers_dir)
+        self.mock_media_root = self.patcher.start()
+
 
 
     def test_successful_paper_creation(self):
@@ -60,8 +69,8 @@ class PaperTests(TestCase):
         paper_data = {
             'title': 'Test Paper',
             'paper_file': self.encoded_pdf,
-            'author_id': self.user.id,
-            'conference_id': self.conference.id
+            'author': self.user.id,
+            'conference': self.conference.id
         }
 
         # Send request
@@ -88,7 +97,7 @@ class PaperTests(TestCase):
         
         # Test missing author_id
         invalid_data = self.valid_paper_data.copy()
-        del invalid_data['author_id']
+        del invalid_data['author']
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -98,7 +107,7 @@ class PaperTests(TestCase):
         
         # Test missing conference_id
         invalid_data = self.valid_paper_data.copy()
-        del invalid_data['conference_id']
+        del invalid_data['conference']
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -109,7 +118,7 @@ class PaperTests(TestCase):
     def test_invalid_author_id(self):
         """Test paper creation with non-existent author ID."""
         invalid_data = self.valid_paper_data.copy()
-        invalid_data['author_id'] = 99999  # Non-existent ID
+        invalid_data['author'] = 99999  # Change to match view's expected field name
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -121,7 +130,7 @@ class PaperTests(TestCase):
     def test_invalid_conference_id(self):
         """Test paper creation with non-existent conference ID."""
         invalid_data = self.valid_paper_data.copy()
-        invalid_data['conference_id'] = 99999  # Non-existent ID
+        invalid_data['conference'] = 99999  # Non-existent ID
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -134,6 +143,15 @@ class PaperTests(TestCase):
         """Test paper creation with invalid HTTP method."""
         response = self.client.get(reverse('create_paper'))
         self.assertEqual(response.status_code, 405)
+    
+    def tearDown(self):
+        """Clean up test data."""
+        # Stop the patcher
+        self.patcher.stop()
+
+        # Remove test directory and contents
+        if os.path.exists(self.test_papers_dir):
+            shutil.rmtree(os.path.dirname(self.test_papers_dir))
 
 class ListPapersTests(TestCase):
     def setUp(self):
@@ -175,9 +193,17 @@ class ListPapersTests(TestCase):
             "user_id": self.user.id
         }
 
+        # Set up test papers directory
+        self.test_papers_dir = os.path.join(settings.BASE_DIR, 'test_media', 'test_papers')
+        os.makedirs(self.test_papers_dir, exist_ok=True)
+
+        # Mock MEDIA_ROOT for tests
+        self.patcher = patch('django.conf.settings.MEDIA_ROOT', self.test_papers_dir)
+        self.mock_media_root = self.patcher.start()
+
     def test_list_papers_with_pagination(self):
         """Test pagination functionality"""
-        # Create 8 more papers for pagination testing
+
         for i in range(8):
             Paper.objects.create(
                 title=f"Paper {i+3}",
@@ -185,8 +211,6 @@ class ListPapersTests(TestCase):
                 conference=self.conference,
                 status_id='submitted'
             )
-        
-        print(Paper.objects.all())
 
         # Test first page with 5 items
         response = self.client.post(
@@ -320,13 +344,28 @@ class ListPapersTests(TestCase):
         }
         
         self.assertEqual(set(paper.keys()), required_fields)
+    
+    def tearDown(self):
+        """Clean up test data."""
+        # Stop the patcher
+        self.patcher.stop()
+
+        # Remove test directory and contents
+        if os.path.exists(self.test_papers_dir):
+            shutil.rmtree(os.path.dirname(self.test_papers_dir))
 
 class ViewPaperPDFTests(TestCase):
     def setUp(self):
         """Set up test environment."""
         self.client = Client()
         
-        # Create test media directory structure
+        # Set up test papers directory
+        self.test_papers_dir = os.path.join(settings.BASE_DIR, 'test_media', 'test_papers')
+        os.makedirs(self.test_papers_dir, exist_ok=True)
+
+        # Mock MEDIA_ROOT for tests
+        self.patcher = patch('django.conf.settings.MEDIA_ROOT', self.test_papers_dir)
+        self.mock_media_root = self.patcher.start()# Create test media directory structure
         self.test_media_root = os.path.join(settings.BASE_DIR, 'test_media')
         self.test_papers_dir = os.path.join(self.test_media_root, 'papers', 'paper')
         os.makedirs(self.test_papers_dir, exist_ok=True)
@@ -336,8 +375,11 @@ class ViewPaperPDFTests(TestCase):
         self.test_filename = "test_paper.pdf"
         self.test_filepath = os.path.join(self.test_papers_dir, self.test_filename)
         
-        with open(self.test_filepath, 'wb') as f:
-            f.write(self.test_pdf_content)
+        try:
+            with open(self.test_filepath, 'wb') as f:
+                f.write(self.test_pdf_content)
+        except Exception as e:
+            print(f"Error creating test PDF file: {e}")
             
     def tearDown(self):
         """Clean up test environment."""
@@ -398,3 +440,12 @@ class ViewPaperPDFTests(TestCase):
         """Test response for non-GET requests."""
         response = self.client.post(reverse('view_paper_pdf', args=['test.pdf']))
         self.assertEqual(response.status_code, 405)
+    
+    def tearDown(self):
+        """Clean up test environment."""
+        # Stop the patcher
+        self.patcher.stop()
+
+        # Remove test directory and contents
+        if os.path.exists(self.test_papers_dir):
+            shutil.rmtree(os.path.dirname(self.test_papers_dir)) 
