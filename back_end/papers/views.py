@@ -12,9 +12,11 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.decorators import api_view
 from datetime import datetime
 import os
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.core.paginator import EmptyPage
 from django.core.paginator import PageNotAnInteger
+from django.http import FileResponse
 
 @csrf_exempt
 @swagger_auto_schema(
@@ -28,7 +30,7 @@ from django.core.paginator import PageNotAnInteger
             'author_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the author'),
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference')
         },
-        required=['title', 'paper_file', 'author_id', 'conference_id']
+        required=['title', 'paper_file', 'author', 'conference']
     ),
     responses={
         201: openapi.Response(description="Paper added successfully"),
@@ -43,8 +45,8 @@ def create_paper(request):
         data = json.loads(request.body)
         title = data.get('title')
         paper_file = data.get('paper_file')
-        author_id = data.get('author_id')
-        conference_id = data.get('conference_id')
+        author_id = data.get('author')
+        conference_id = data.get('conference')
 
         if title is None or author_id is None or conference_id is None:
             return JsonResponse({'error': 'Missing fields'}, status=400)
@@ -53,11 +55,9 @@ def create_paper(request):
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
         paper_file = ContentFile(paper_file, name=f'paper_file_{current_time}.pdf')
 
-        fs = FileSystemStorage(location='papers_pdf')
+        fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'papers', 'paper'))
         filename = fs.save(paper_file.name, paper_file)
         paper_file = fs.url(filename)
-
-        print(paper_file)
 
         try:
             author = User.objects.get(id=author_id)
@@ -130,9 +130,9 @@ def list_papers(request):
                 "id": paper.id,
                 "title": paper.title,
                 "paper_file": paper.paper_file.url if paper.paper_file else None,
-                "conference_id": paper.conference.id,
+                "conference": paper.conference.id,
                 "conference_title": paper.conference.title,
-                "status_id": paper.status_id,
+                "status": paper.status_id,
                 "created_at": paper.conference.created_at.isoformat(),
             })
         
@@ -154,3 +154,62 @@ def list_papers(request):
         return JsonResponse({"error": "User not found"}, status=404)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+@csrf_exempt
+@swagger_auto_schema(
+    method='get',
+    operation_description="View PDF paper file in browser",
+    responses={
+        200: openapi.Response(description="PDF file served successfully"),
+        404: openapi.Response(description="Paper file not found"),
+        400: openapi.Response(description="Invalid filename")
+    }
+)
+@api_view(['GET'])
+def view_paper_pdf(request, filename):
+    """
+    Serve a PDF file from the papers/paper directory for viewing in the browser.
+    
+    Args:
+        request: The HTTP request object
+        filename: The name of the PDF file to serve
+    
+    Returns:
+        FileResponse: The PDF file response that can be viewed in the browser
+        JsonResponse: Error response if file is not found or invalid
+    """
+    try:
+        # Sanitize the filename to prevent directory traversal
+        filename = os.path.basename(filename)
+        
+        # Construct the file path using the same structure as in the URL
+        file_path = os.path.join(settings.MEDIA_ROOT, 'papers', 'paper', filename)
+        
+        # Verify the file exists
+        if not os.path.exists(file_path):
+            return JsonResponse({"error": f"File not found: {filename}"}, status=404)
+        
+        # Verify it's a PDF file
+        if not filename.lower().endswith('.pdf'):
+            return JsonResponse({"error": "Invalid file type"}, status=400)
+        
+        # Open the file - FileResponse will handle closing it
+        try:
+            pdf_file = open(file_path, 'rb')
+            response = FileResponse(
+                pdf_file,
+                content_type='application/pdf',
+                filename=filename,
+                as_attachment=False  # This ensures it displays in browser
+            )
+        except FileNotFoundError:
+            return JsonResponse({"error": f"File not found: {filename}"}, status=404)
+
+        
+        # Add cache headers to improve performance
+        response['Cache-Control'] = 'public, max-age=3600'
+        
+        return response
+            
+    except Exception as e:
+        return JsonResponse({"error": f"Error serving PDF: {str(e)}"}, status=500)

@@ -11,3 +11,5 @@ db.sqlite3
 back_end/papers_pdf/
 
 papers_pdf/
+
+back_end/papers/paper/
