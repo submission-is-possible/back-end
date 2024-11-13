@@ -6,6 +6,33 @@ from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 
+'''  esempio richiesta post
+POST /reviews/get_user_reviews/?page=2&page_size=10
+Content-Type: application/json
+{
+    "user_id": 1
+}
+esempio risposta:
+{
+    "current_page": 1,
+    "total_pages": 3,
+    "total_reviews": 13,
+    "reviews": [
+        {
+            "paper_title": "Paper Title 1",
+            "comment_text": "Very insightful paper!",
+            "score": 5,
+            "created_at": "2024-10-01T14:30:00Z"
+        },
+        {
+            "paper_title": "Paper Title 2",
+            "comment_text": "Interesting findings.",
+            "score": 4,
+            "created_at": "2024-09-28T10:15:00Z"
+        },
+    ]
+}
+'''
 @swagger_auto_schema(
     method='post',
     operation_description="Restituisce una lista di recensioni scritte dall'utente con paginazione.",
