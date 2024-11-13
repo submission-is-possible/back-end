@@ -30,7 +30,7 @@ from django.http import FileResponse
             'author_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the author'),
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference')
         },
-        required=['title', 'paper_file', 'author_id', 'conference_id']
+        required=['title', 'paper_file', 'author', 'conference']
     ),
     responses={
         201: openapi.Response(description="Paper added successfully"),
@@ -45,8 +45,10 @@ def create_paper(request):
         data = json.loads(request.body)
         title = data.get('title')
         paper_file = data.get('paper_file')
-        author_id = data.get('author_id')
-        conference_id = data.get('conference_id')
+        author_id = data.get('author')
+        conference_id = data.get('conference')
+
+        print(data)
 
         if title is None or author_id is None or conference_id is None:
             return JsonResponse({'error': 'Missing fields'}, status=400)
@@ -194,13 +196,17 @@ def view_paper_pdf(request, filename):
             return JsonResponse({"error": "Invalid file type"}, status=400)
         
         # Open the file - FileResponse will handle closing it
-        pdf_file = open(file_path, 'rb')
-        response = FileResponse(
-            pdf_file,
-            content_type='application/pdf',
-            filename=filename,
-            as_attachment=False  # This ensures it displays in browser
-        )
+        try:
+            pdf_file = open(file_path, 'rb')
+            response = FileResponse(
+                pdf_file,
+                content_type='application/pdf',
+                filename=filename,
+                as_attachment=False  # This ensures it displays in browser
+            )
+        except FileNotFoundError:
+            return JsonResponse({"error": f"File not found: {filename}"}, status=404)
+
         
         # Add cache headers to improve performance
         response['Cache-Control'] = 'public, max-age=3600'
