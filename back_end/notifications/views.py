@@ -231,7 +231,7 @@ def delete_notification(request):
             data = json.loads(request.body)
             user_id = data.get('user_id')
             notification_id = data.get('id_notification')
-
+            # Check if the user_id and notification_id are present
             if not (user_id and notification_id):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
 
