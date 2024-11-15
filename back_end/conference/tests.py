@@ -129,16 +129,20 @@ class DeleteConferenceTestCase(TestCase):
             role="admin"
         )
 
+        self.url = reverse('delete_conference')
+
         self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
 
     def test_delete_conference_as_admin(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta per eliminare la conferenza
-        response = self.client.post(
-            reverse('delete_conference'),
-            data={'conference_id': self.conference.id, 'user_id': self.user.id},
+        response = self.client.delete(
+            self.url,
+            data={'conference_id': self.conference.id},
             content_type='application/json'
         )
 
@@ -159,14 +163,16 @@ class DeleteConferenceTestCase(TestCase):
 
         # Effettua il login dell'altro utente
         self.client.force_login(other_user)
+        session = self.client.session
+        session['_auth_user_id'] = other_user.id
+        session.save()
 
         # Invia la richiesta per eliminare la conferenza
-        response = self.client.post(
-            reverse('delete_conference'),
-            data={'conference_id': self.conference.id, 'user_id': other_user.id},
+        response = self.client.delete(
+            self.url,
+            data={'conference_id': self.conference.id},
             content_type='application/json'
         )
-
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json(), {'error': 'Permission denied. User is not an admin of this conference.'})
 
@@ -174,12 +180,10 @@ class DeleteConferenceTestCase(TestCase):
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_with_missing_fields(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta senza i campi obbligatori
-        response = self.client.post(
-            reverse('delete_conference'),
+        response = self.client.delete(
+            self.url,
             data={},
             content_type='application/json'
         )
@@ -191,13 +195,11 @@ class DeleteConferenceTestCase(TestCase):
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_with_invalid_json(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta con un JSON non valido
-        response = self.client.post(
-            reverse('delete_conference'),
-            data='invalid json',
+        response = self.client.delete(
+            self.url,
+            data={'this is not a json'},
             content_type='application/json'
         )
 
@@ -208,13 +210,11 @@ class DeleteConferenceTestCase(TestCase):
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_with_non_existent_conference(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta per eliminare una conferenza inesistente
-        response = self.client.post(
-            reverse('delete_conference'),
-            data={'conference_id': 999, 'user_id': self.user.id},
+        response = self.client.delete(
+            self.url,
+            data={'conference_id': 999},
             content_type='application/json'
         )
 

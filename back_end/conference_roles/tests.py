@@ -119,32 +119,32 @@ class GetUserConferencesTests(TestCase):
         ConferenceRole.objects.create(user=self.user, conference=self.conference2)
         self.url = reverse('get_user_conferences')
 
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+
+
     def test_get_user_conferences_successful(self):
         """Test per ottenere conferenze di un utente con paginazione"""
-        payload = {
-            "user_id": self.user.id
-        }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        response = self.client.get(self.url, content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["total_conferences"], 2)  # L'utente ha 2 conferenze
 
     def test_get_user_conferences_missing_user_id(self):
         """Test per mancanza di user_id"""
-        payload = {}  # Mancante user_id
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Missing user_id")
+        session = self.client.session
+        session['_auth_user_id'] = 9999
+        session.save()
 
-    def test_get_user_conferences_invalid_json(self):
-        """Test per dati JSON non validi"""
-        invalid_json_payload = "This is not JSON"
-        response = self.client.post(self.url, data=invalid_json_payload, content_type="application/json")
+        response = self.client.get(self.url, content_type="application/json")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Invalid JSON")
+        self.assertEqual(response.json()["error"], "User not found")
 
     def test_get_user_conferences_invalid_method(self):
-        """Test per metodo di richiesta non valido (non POST)"""
-        response = self.client.get(self.url)
+        """Test per metodo di richiesta non valido (non GET)"""
+        response = self.client.post(self.url)
         self.assertEqual(response.status_code, 405)
         #self.assertEqual(response.json()["error"], "Only POST requests are allowed")
-        self.assertEqual(response.json(), {"detail": "Method \"GET\" not allowed."})
+        self.assertEqual(response.json(), {"detail": "Method \"POST\" not allowed."})

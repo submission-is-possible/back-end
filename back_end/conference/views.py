@@ -83,9 +83,8 @@ def create_conference(request):
         type=openapi.TYPE_OBJECT,
         properties={
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete'),
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user requesting the deletion')
         },
-        required=['conference_id', 'user_id']
+        required=['conference_id']
     ),
     responses={
         200: openapi.Response(description="Conference deleted successfully"),
@@ -96,25 +95,25 @@ def create_conference(request):
     }
 )
 @api_view(['DELETE'])
+@get_user
 def delete_conference(request):
     if request.method == 'DELETE':
         try:
             data = json.loads(request.body)
             conference_id = data.get('conference_id')
-            user_id = data.get('user_id')  #`user_id` deve essere fornito per verificare i permessi dell'utente,
+            user = request.user  #`user_id` deve essere fornito per verificare i permessi dell'utente,
             # se l'utente è admin della conferenza, può eliminarla
 
             # Verifica che l'ID della conferenza e l'ID utente siano forniti
             if not conference_id:
                 return JsonResponse({'error': 'Missing conference_id'}, status=400)
-            if not user_id:
-                return JsonResponse({'error': 'Missing user_id'}, status=400)
+
             # Controlla se l'utente ha il ruolo di admin per la conferenza
             try:
                 conference = Conference.objects.get(id=conference_id)
                 is_admin = ConferenceRole.objects.filter(
                     conference=conference,
-                    user_id=user_id,
+                    user=user,
                     role='admin'
                 ).exists()
 
