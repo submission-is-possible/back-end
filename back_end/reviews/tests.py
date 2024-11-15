@@ -55,11 +55,15 @@ class GetUserReviewsTest(TestCase):
         self.url = reverse('get_user_reviews')
         self.client = Client()
 
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+
     def test_get_user_reviews_success(self):
         """Test per una richiesta valida con un user_id e verifica della paginazione."""
-        response = self.client.post(
+        response = self.client.get(
             self.url,
-            data=json.dumps({"user_id": self.user.id}),
             content_type="application/json"
         )
         
@@ -73,29 +77,27 @@ class GetUserReviewsTest(TestCase):
         self.assertEqual(data["total_pages"], 1)
 
     def test_get_user_reviews_invalid_method(self):
-        """Test per verificare che una richiesta non-POST venga rifiutata con status 405."""
-        response = self.client.get(self.url)
+        """Test per verificare che una richiesta non-GET venga rifiutata con status 405."""
+        response = self.client.post(self.url)
         self.assertEqual(response.status_code, 405)
-        #self.assertEqual(response.json(), {"error": "Only POST requests are allowed"})
+        #self.assertEqual(response.json(), {"error": "Only GET requests are allowed"})
         #anche se ho modificato il messaggio di errore, django di default restituisce un messaggio di errore diverso,
         #quindi il test fallirà. 
-        self.assertEqual(response.json(), {"detail": "Method \"GET\" not allowed."})
+        self.assertEqual(response.json(), {"detail": "Method \"POST\" not allowed."})
 
     def test_get_user_reviews_missing_user_id(self):
         """Test per verificare la gestione di una richiesta senza user_id."""
-        response = self.client.post(
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = 9999
+        session.save()
+        
+        response = self.client.get(
             self.url,
-            data=json.dumps({}),
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"error": "Missing user_id"})
-
-    def test_get_user_reviews_invalid_json(self):
-        """Test per verificare la gestione di una richiesta con JSON non valido."""
-        response = self.client.post(self.url, data="Invalid JSON", content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"error": "Invalid JSON"})
+        self.assertEqual(response.json(), {"error": "User not found"})
 
     def test_get_user_reviews_pagination(self):
         """Test per verificare la corretta paginazione."""
@@ -109,9 +111,8 @@ class GetUserReviewsTest(TestCase):
                 created_at=timezone.now()
             )
 
-        response = self.client.post(
+        response = self.client.get(
             f"{self.url}?page=2&page_size=10",
-            data=json.dumps({"user_id": self.user.id}),
             content_type="application/json"
         )
         
@@ -174,9 +175,8 @@ class GetPaperReviewsTest(TestCase):
 
     def test_get_paper_reviews_success(self):
         """Test per una richiesta valida con un paper_id e verifica della paginazione."""
-        response = self.client.post(
-            self.url,
-            data=json.dumps({"paper_id": self.paper.id}),
+        response = self.client.get(
+            f"{self.url}?paper_id={self.paper.id}",
             content_type="application/json"
         )
         
@@ -191,28 +191,24 @@ class GetPaperReviewsTest(TestCase):
 
     def test_get_paper_reviews_invalid_method(self):
         """Test per verificare che una richiesta non-POST venga rifiutata con status 405."""
-        response = self.client.get(self.url)
+        response = self.client.post(
+            f"{self.url}?paper_id={self.paper.id}",
+            content_type="application/json"
+        )
         self.assertEqual(response.status_code, 405)
         #self.assertEqual(response.json(), {"error": "Only POST requests are allowed"})
         #anche se ho modificato il messaggio di errore, django di default restituisce un messaggio di errore diverso,
         #quindi il test fallirà. 
-        self.assertEqual(response.json(), {"detail": "Method \"GET\" not allowed."})
+        self.assertEqual(response.json(), {"detail": "Method \"POST\" not allowed."})
 
     def test_get_paper_reviews_missing_paper_id(self):
         """Test per verificare la gestione di una richiesta senza paper_id."""
-        response = self.client.post(
+        response = self.client.get(
             self.url,
-            data=json.dumps({}),
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"error": "Missing paper_id"})
-
-    def test_get_paper_reviews_invalid_json(self):
-        """Test per verificare la gestione di una richiesta con JSON non valido."""
-        response = self.client.post(self.url, data="Invalid JSON", content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"error": "Invalid JSON"})
 
     def test_get_paper_reviews_pagination(self):
         """Test per verificare la corretta paginazione."""
@@ -226,9 +222,8 @@ class GetPaperReviewsTest(TestCase):
                 created_at=timezone.now()
             )
 
-        response = self.client.post(
-            f"{self.url}?page=2&page_size=10",
-            data=json.dumps({"paper_id": self.paper.id}),
+        response = self.client.get(
+            f"{self.url}?page=2&page_size=10&paper_id={self.paper.id}",
             content_type="application/json"
         )
         

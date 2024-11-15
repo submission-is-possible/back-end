@@ -46,13 +46,17 @@ class PaperTests(TestCase):
         self.valid_paper_data = {
             'title': 'Test Paper',
             'paper_file': self.encoded_pdf,
-            'author_id': self.user.id,  # Send just the ID
             'conference_id': self.conference.id
         }
 
-
     def test_successful_paper_creation(self):
         # Prepare test data
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+    
         paper_data = {
             'title': 'Test Paper',
             'paper_file': self.encoded_pdf,
@@ -73,18 +77,13 @@ class PaperTests(TestCase):
     def test_missing_fields(self):
         """Test paper creation with missing required fields."""
         # Test missing title
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+
         invalid_data = self.valid_paper_data.copy()
         del invalid_data['title']
-        response = self.client.post(
-            reverse('create_paper'),
-            data=json.dumps(invalid_data),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 400)
-        
-        # Test missing author_id
-        invalid_data = self.valid_paper_data.copy()
-        del invalid_data['author_id']
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -104,18 +103,29 @@ class PaperTests(TestCase):
 
     def test_invalid_author_id(self):
         """Test paper creation with non-existent author ID."""
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = 99999
+        session.save()
+
         invalid_data = self.valid_paper_data.copy()
-        invalid_data['author_id'] = 99999  # Non-existent ID
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
             content_type='application/json'
         )
-        self.assertEqual(response.status_code, 404)
-        self.assertIn(b'Author not found', response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b'User not found', response.content)
 
     def test_invalid_conference_id(self):
         """Test paper creation with non-existent conference ID."""
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+        
         invalid_data = self.valid_paper_data.copy()
         invalid_data['conference_id'] = 99999  # Non-existent ID
         response = self.client.post(

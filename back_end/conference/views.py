@@ -37,8 +37,6 @@ from users.decorators import get_user
 @api_view(['POST'])
 @get_user
 def create_conference(request):
-    print("here")
-    print(request)
     if request.method == 'POST':
         try:
             # Estrai i dati dal body della richiesta

@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.test import TestCase, Client
 from rest_framework.test import APITestCase
-from django.contrib.auth import login
+
 from .models import User, Conference
 from conference_roles.models import ConferenceRole
 
@@ -16,20 +16,24 @@ class ConferenceCreationTests(TestCase):
             email="admin@example.com",
             password="securepassword"
         )
-
-        login()
-
+        
         self.url = reverse('create_conference')  # Assicurati che l'URL corrisponda al nome dato nella tua configurazione degli URL
 
     def test_create_conference_successful(self):
         """Test per la creazione di una conferenza con dati validi"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         payload = {
             "title": "Test Conference",
-            "admin_id": self.admin_user.id,
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference"
         }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json", cookies)
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["message"], "Conference created successfully")
         self.assertIn("conference_id", response.json())
@@ -40,6 +44,13 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_missing_fields(self):
         """Test per mancanza di campi obbligatori"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         payload = {
             "title": "Test Conference",
             "admin_id": self.admin_user.id,
@@ -51,18 +62,30 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_invalid_admin(self):
         """Test per ID admin non valido"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = 9999
+        session.save()
+
         payload = {
             "title": "Test Conference",
-            "admin_id": 9999,  # Un ID che non esiste
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference"
         }
         response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Admin user not found")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "User not found")
 
     def test_create_conference_invalid_json(self):
         """Test per dati JSON non validi"""
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         invalid_json_payload = "This is not JSON"
         response = self.client.post(self.url, data=invalid_json_payload, content_type="application/json")
         self.assertEqual(response.status_code, 400)
@@ -70,6 +93,12 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_invalid_method(self):
         """Test per metodo di richiesta non valido (non POST)"""
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response.json()["detail"], "Method \"GET\" not allowed.")
