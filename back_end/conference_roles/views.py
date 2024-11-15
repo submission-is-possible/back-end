@@ -9,13 +9,8 @@ from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-'''esempio richiesta post
-{
-    "id_user": 1,
-    "id_conference": 3,
-    "role_user": "reviewer"
-}
-'''
+from users.decorators import get_user
+
 @csrf_exempt
 @swagger_auto_schema(
     method='post',
@@ -84,82 +79,34 @@ def create_conference_role(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
-
-'''  esempio richiesta post
-POST /conference_roles/get_user_conferences/?page=2&page_size=10
-Content-Type: application/json
-{
-    "user_id": 1
-}
-
-esempio risposta
-{
-    "current_page": 2,
-    "total_pages": 3,
-    "total_conferences": 25,
-    "conferences": [
-        {
-            "id": 1,
-            "title": "Conference 1",
-            "description": "Description 1",
-            "created_at": "2021-01-01T00:00:00",
-            "deadline": "2021-06-01T00:00:00",
-            "roles": ["admin", "author"]
-        },
-        {
-            "id": 2,
-            "title": "Conference 2",
-            "description": "Description 2",
-            "created_at": "2021-02-01T00:00:00",
-            "deadline": "2021-07-01T00:00:00",
-            "roles": ["reviewer"]
-        },
-        ...
-    ]
-}
-'''
 @csrf_exempt
 @swagger_auto_schema(
-    method='post',
+    method='get',
     operation_description="Get conferences for a specific user with pagination.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user')
-        },
-        required=['user_id']
-    ),
     responses={
         200: openapi.Response(description="List of conferences for the user"),
         400: openapi.Response(description="Missing user_id or invalid JSON"),
         405: openapi.Response(description="Only POST requests are allowed")
     }
 )
-@api_view(['POST'])
+@api_view(['GET'])
+@get_user
 def get_user_conferences(request):
     """Restituisce una lista di conferenze di cui l'utente fa parte con paginazione."""
+    # Verifica che la richiesta sia GET
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
 
-    # Verifica che la richiesta sia POST
-    if request.method != 'POST':
-        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
-
-    # Parse del corpo della richiesta per ottenere user_id
-    try:
-        data = json.loads(request.body)
-        user_id = data.get("user_id")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-    # Verifica che user_id sia fornito
-    if not user_id:
-        return JsonResponse({"error": "Missing user_id"}, status=400)
+        #data = json.loads(request.body)
+    user = request.user #data.get("user_id")
+    
 
     # Estrai il numero di pagina e il limite per la paginazione dai parametri della richiesta
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
 
     # Filtra i ruoli conferenza per l'utente specificato e ottieni le conferenze collegate
-    user_conferences = ConferenceRole.objects.filter(user_id=user_id).select_related('conference')
+    user_conferences = ConferenceRole.objects.filter(user=user).select_related('conference')
 
     # Crea una struttura dati per organizzare conferenze e ruoli
     conferences_dict = {}
@@ -187,4 +134,7 @@ def get_user_conferences(request):
         "total_conferences": paginator.count,
         "conferences": list(page_obj)
     }
+
+    print(paginator.count)
+
     return JsonResponse(response_data, status=200)

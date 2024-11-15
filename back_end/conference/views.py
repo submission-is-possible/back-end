@@ -9,6 +9,8 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import api_view
+from users.decorators import get_user
+
 
 
 @csrf_exempt  # Disabilita temporaneamente il controllo CSRF (per sviluppo locale)
@@ -33,34 +35,22 @@ from rest_framework.decorators import api_view
     }
 )
 @api_view(['POST'])
-
-# Struttura JSON richiesta per la funzione create_conference:
-# {
-#     "title": "Nome della Conferenza",
-#     "admin_id": 1,  # ID dell'utente che sarà amministratore della conferenza
-#     "deadline": "YYYY-MM-DDTHH:MM:SSZ",  # Data e ora limite della conferenza (formato ISO 8601)
-#     "description": "Descrizione dettagliata della conferenza"
-# }
-@csrf_exempt
+@get_user
 def create_conference(request):
+    print("here")
+    print(request)
     if request.method == 'POST':
         try:
             # Estrai i dati dal body della richiesta
             data = json.loads(request.body)
             title = data.get('title')
-            admin_id = data.get('admin_id')
+            admin_user = request.user
             deadline = data.get('deadline')
             description = data.get('description')
 
             # Verifica che i campi richiesti siano presenti
-            if not (title and admin_id and deadline and description):
+            if not (title and deadline and description):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
-
-            # Verifica se l'utente (admin) esiste
-            try:
-                admin_user = User.objects.get(id=admin_id)
-            except User.DoesNotExist:
-                return JsonResponse({'error': 'Admin user not found'}, status=404)
 
             # Crea la nuova conferenza
             conference = Conference.objects.create(
@@ -77,7 +67,7 @@ def create_conference(request):
                 conference=conference,
                 role='admin'
             )
-            print("sono qui")
+
             return JsonResponse({
                 'message': 'Conference created successfully',
                 'conference_id': conference.id
@@ -87,15 +77,9 @@ def create_conference(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
-
-# Struttura JSON richiesta per la funzione delete_conference:
-# {
-#     "conference_id": 1,  # ID della conferenza da eliminare
-#     "user_id": 1         # ID dell'utente che richiede l'eliminazione
-# }
 @csrf_exempt
 @swagger_auto_schema(
-    method='post',
+    method='delete',
     operation_description="Delete a conference by providing the conference_id and user_id.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
@@ -113,9 +97,9 @@ def create_conference(request):
         405: openapi.Response(description="Only POST requests are allowed"),
     }
 )
-@api_view(['POST'])
+@api_view(['DELETE'])
 def delete_conference(request):
-    if request.method == 'POST':
+    if request.method == 'DELETE':
         try:
             data = json.loads(request.body)
             conference_id = data.get('conference_id')
@@ -151,9 +135,6 @@ def delete_conference(request):
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
-
-
 
 @csrf_exempt
 @swagger_auto_schema(

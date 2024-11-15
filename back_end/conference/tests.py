@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.test import TestCase, Client
 from rest_framework.test import APITestCase
-
+from django.contrib.auth import login
 from .models import User, Conference
 from conference_roles.models import ConferenceRole
 
@@ -16,6 +16,9 @@ class ConferenceCreationTests(TestCase):
             email="admin@example.com",
             password="securepassword"
         )
+
+        login()
+
         self.url = reverse('create_conference')  # Assicurati che l'URL corrisponda al nome dato nella tua configurazione degli URL
 
     def test_create_conference_successful(self):
@@ -26,7 +29,7 @@ class ConferenceCreationTests(TestCase):
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference"
         }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json", cookies)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["message"], "Conference created successfully")
         self.assertIn("conference_id", response.json())

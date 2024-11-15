@@ -1,5 +1,5 @@
 from django.http import HttpResponse, JsonResponse
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import login
 from django.contrib.auth.hashers import make_password, check_password
 from .models import User
 from django.views.decorators.csrf import csrf_exempt
@@ -9,7 +9,6 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import api_view
-
 
 '''
 TEST DI PROVA PER VEDERE SE IL LO SCHEMA DEL DATABASE FUNZIONA
@@ -31,7 +30,7 @@ def list_users(request):
 @csrf_exempt  # Disabilita temporaneamente il controllo CSRF (per sviluppo locale)
 @swagger_auto_schema(
     method='post',
-operation_description="Create a new user with first name, last name, email, and password.",
+    operation_description="Create a new user with first name, last name, email, and password.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
@@ -108,7 +107,6 @@ def login_user(request):
             data = json.loads(request.body)
             email = data.get('email')
             password = data.get('password')
-            print(email, password)
 
             # Verifica che i campi siano presenti
             if not (email and password):
@@ -120,7 +118,8 @@ def login_user(request):
                 # Confronta la password fornita con quella salvata nel database
                 if check_password(password, user.password):
                     # Registra l'utente nella sessione
-                    login(request, user)  
+                    login(request, user)
+                    
                     return JsonResponse({'message': 'Login successful', 'user_id': user.id}, status=200)
                 else:
                     return JsonResponse({'error': 'Invalid email or password'}, status=401)

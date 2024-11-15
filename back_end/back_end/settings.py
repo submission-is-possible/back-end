@@ -66,6 +66,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",  # Alternativa per localhost
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+
 ROOT_URLCONF = 'back_end.urls'
 
 TEMPLATES = [
@@ -138,3 +140,15 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_URL = '/users/login/'
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+# Session Cookie Settings
+SESSION_COOKIE_NAME = 'session_id'  # Name of the session cookie
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+SESSION_COOKIE_SECURE = True  # Set to True if using HTTPS
+SESSION_COOKIE_SAMESITE = 'None'  # Options: 'Lax', 'Strict', or 'None' for cross-site cookies
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Whether the session expires when the user closes their browser
+SESSION_COOKIE_AGE = 1209600  # Age of session cookies, in seconds (2 weeks by default)
