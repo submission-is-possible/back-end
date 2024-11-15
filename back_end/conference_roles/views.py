@@ -118,69 +118,96 @@ esempio risposta
     ]
 }
 '''
+
+
+
 @csrf_exempt
 @swagger_auto_schema(
     method='post',
-    operation_description="Get conferences for a specific user with pagination.",
+    operation_description="Get conferences for a specific user with pagination or retrieve a specific conference if conference_id is provided.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user')
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user'),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference (optional)'),
         },
         required=['user_id']
     ),
     responses={
-        200: openapi.Response(description="List of conferences for the user"),
+        200: openapi.Response(description="Conference details or list of conferences for the user"),
         400: openapi.Response(description="Missing user_id or invalid JSON"),
+        404: openapi.Response(description="Conference not found or access denied"),
         405: openapi.Response(description="Only POST requests are allowed")
     }
 )
 @api_view(['POST'])
 def get_user_conferences(request):
-    """Restituisce una lista di conferenze di cui l'utente fa parte con paginazione."""
+    """Returns a specific conference if conference_id is provided; otherwise, returns a list of conferences for the user with pagination."""
 
-    # Verifica che la richiesta sia POST
+    # Verify that the request is POST
     if request.method != 'POST':
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
-    # Parse del corpo della richiesta per ottenere user_id
+    # Parse the request body to get user_id and conference_id
     try:
         data = json.loads(request.body)
         user_id = data.get("user_id")
+        conference_id = data.get("conference_id")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    # Verifica che user_id sia fornito
+    # Verify that user_id is provided
     if not user_id:
         return JsonResponse({"error": "Missing user_id"}, status=400)
 
-    # Estrai il numero di pagina e il limite per la paginazione dai parametri della richiesta
+    # If conference_id is provided, fetch the specific conference
+    if conference_id:
+        try:
+            # Check if the user has a role in the specified conference
+            role = ConferenceRole.objects.get(user_id=user_id, conference_id=conference_id)
+            conference = role.conference
+            conference_data = {
+                "id": conference.id,
+                "title": conference.title,
+                "description": conference.description,
+                "created_at": conference.created_at.isoformat(),
+                "deadline": conference.deadline.isoformat(),
+                "roles": [role.role],
+                "user_id": conference.admin_id.id
+            }
+            return JsonResponse(conference_data, status=200)
+        except ConferenceRole.DoesNotExist:
+            return JsonResponse({"error": "Conference not found or access denied"}, status=404)
+
+    # If conference_id is not provided, proceed to return the list of conferences
+    # Extract page number and page size for pagination from request parameters
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
 
-    # Filtra i ruoli conferenza per l'utente specificato e ottieni le conferenze collegate
+    # Filter conference roles for the specified user and get linked conferences
     user_conferences = ConferenceRole.objects.filter(user_id=user_id).select_related('conference')
 
-    # Crea una struttura dati per organizzare conferenze e ruoli
+    # Create a data structure to organize conferences and roles
     conferences_dict = {}
     for role in user_conferences:
-        conference_id = role.conference.id
-        if conference_id not in conferences_dict:
-            conferences_dict[conference_id] = {
+        conf_id = role.conference.id
+        if conf_id not in conferences_dict:
+            conferences_dict[conf_id] = {
                 "id": role.conference.id,
                 "title": role.conference.title,
                 "description": role.conference.description,
                 "created_at": role.conference.created_at.isoformat(),
                 "deadline": role.conference.deadline.isoformat(),
-                "roles": []
+                "roles": [],
+                "user_id": role.conference.admin_id.id
             }
-        conferences_dict[conference_id]["roles"].append(role.role)
+        conferences_dict[conf_id]["roles"].append(role.role)
 
-    # Applica la paginazione
+    # Apply pagination
     paginator = Paginator(list(conferences_dict.values()), page_size)
     page_obj = paginator.get_page(page_number)
 
-    # Crea la risposta con le conferenze per la pagina corrente
+    # Create the response with the conferences for the current page
     response_data = {
         "current_page": page_obj.number,
         "total_pages": paginator.num_pages,
@@ -188,3 +215,5 @@ def get_user_conferences(request):
         "conferences": list(page_obj)
     }
     return JsonResponse(response_data, status=200)
+
+
