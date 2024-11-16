@@ -78,7 +78,7 @@ def create_conference(request):
 @csrf_exempt
 @swagger_auto_schema(
     method='delete',
-    operation_description="Delete a conference by providing the conference_id and user_id.",
+    operation_description="Delete a conference by providing the conference_id.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
@@ -97,6 +97,7 @@ def create_conference(request):
 @api_view(['DELETE'])
 @get_user
 def delete_conference(request):
+
     if request.method == 'DELETE':
         try:
             data = json.loads(request.body)
@@ -110,7 +111,7 @@ def delete_conference(request):
 
             # Controlla se l'utente ha il ruolo di admin per la conferenza
             try:
-                conference = Conference.objects.get(id=conference_id)
+                conference = Conference.objects.get(conference_id=conference_id)
                 is_admin = ConferenceRole.objects.filter(
                     conference=conference,
                     user=user,
@@ -203,5 +204,3 @@ def edit_conference(request):
 
     else:
         return JsonResponse({'error': 'Only PATCH requests are allowed'}, status=405)
-
-
