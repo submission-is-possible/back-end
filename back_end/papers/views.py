@@ -50,6 +50,7 @@ def create_paper(request):
         title = data.get('title')
         paper_file = data.get('paper_file')
         conference_id = data.get('conference_id')
+        author = request.user
 
         if title is None or conference_id is None:
             return JsonResponse({'error': 'Missing fields'}, status=400)
@@ -62,17 +63,14 @@ def create_paper(request):
         filename = fs.save(paper_file.name, paper_file)
         paper_file = fs.url(filename)
 
-        try:
-            author = request.user
+        try: 
             conference = Conference.objects.get(id=conference_id)
-        except User.DoesNotExist:
-            return JsonResponse({'error': 'Author not found'}, status=404)
         except Conference.DoesNotExist:
             return JsonResponse({'error': 'Conference not found'}, status=404)
 
         paper = Paper(title=title, paper_file=paper_file, author_id=author, conference=conference, status_id='submitted')
         paper.save()
-
+        print("accio")
         return JsonResponse({'message': 'Paper added successfully',
                              'paper_id': paper.id}, status=201)
     else:

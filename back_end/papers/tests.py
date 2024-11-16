@@ -79,18 +79,11 @@ class PaperTests(TestCase):
         session = self.client.session
         session['_auth_user_id'] = self.user.id
         session.save()
-    
-        paper_data = {
-            'title': 'Test Paper',
-            'paper_file': self.encoded_pdf,
-            'author': self.user.id,
-            'conference': self.conference.id
-        }
 
         # Send request
         response = self.client.post(
             reverse('create_paper'),
-            data=json.dumps(paper_data),
+            data=json.dumps(self.valid_paper_data),
             content_type='application/json'
         )
 
@@ -116,7 +109,7 @@ class PaperTests(TestCase):
         
         # Test missing conference_id
         invalid_data = self.valid_paper_data.copy()
-        del invalid_data['conference']
+        del invalid_data['conference_id']
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -150,7 +143,9 @@ class PaperTests(TestCase):
         session.save()
         
         invalid_data = self.valid_paper_data.copy()
-        invalid_data['conference'] = 99999  # Non-existent ID
+        invalid_data['conference_id'] = 99999  # Non-existent ID
+        print("accio")
+        print(invalid_data)
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),

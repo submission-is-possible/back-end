@@ -137,28 +137,7 @@ def get_user_conferences(request):
 
         #data = json.loads(request.body)
     user = request.user #data.get("user_id")
-    
 
-    # If conference_id is provided, fetch the specific conference
-    if conference_id:
-        try:
-            # Check if the user has a role in the specified conference
-            role = ConferenceRole.objects.get(user_id=user_id, conference_id=conference_id)
-            conference = role.conference
-            conference_data = {
-                "id": conference.id,
-                "title": conference.title,
-                "description": conference.description,
-                "created_at": conference.created_at.isoformat(),
-                "deadline": conference.deadline.isoformat(),
-                "roles": [role.role],
-                "user_id": conference.admin_id.id
-            }
-            return JsonResponse(conference_data, status=200)
-        except ConferenceRole.DoesNotExist:
-            return JsonResponse({"error": "Conference not found or access denied"}, status=404)
-
-    # If conference_id is not provided, proceed to return the list of conferences
     # Extract page number and page size for pagination from request parameters
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
