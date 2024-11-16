@@ -9,6 +9,8 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import api_view
+from users.decorators import get_user
+
 
 
 @csrf_exempt  # Disabilita temporaneamente il controllo CSRF (per sviluppo locale)
@@ -33,34 +35,20 @@ from rest_framework.decorators import api_view
     }
 )
 @api_view(['POST'])
-
-# Struttura JSON richiesta per la funzione create_conference:
-# {
-#     "title": "Nome della Conferenza",
-#     "admin_id": 1,  # ID dell'utente che sarà amministratore della conferenza
-#     "deadline": "YYYY-MM-DDTHH:MM:SSZ",  # Data e ora limite della conferenza (formato ISO 8601)
-#     "description": "Descrizione dettagliata della conferenza"
-# }
-@csrf_exempt
+@get_user
 def create_conference(request):
     if request.method == 'POST':
         try:
             # Estrai i dati dal body della richiesta
             data = json.loads(request.body)
             title = data.get('title')
-            admin_id = data.get('admin_id')
+            admin_user = request.user
             deadline = data.get('deadline')
             description = data.get('description')
 
             # Verifica che i campi richiesti siano presenti
-            if not (title and admin_id and deadline and description):
+            if not (title and deadline and description):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
-
-            # Verifica se l'utente (admin) esiste
-            try:
-                admin_user = User.objects.get(id=admin_id)
-            except User.DoesNotExist:
-                return JsonResponse({'error': 'Admin user not found'}, status=404)
 
             # Crea la nuova conferenza
             conference = Conference.objects.create(
@@ -77,7 +65,7 @@ def create_conference(request):
                 conference=conference,
                 role='admin'
             )
-            print("sono qui")
+
             return JsonResponse({
                 'message': 'Conference created successfully',
                 'conference_id': conference.id
@@ -87,23 +75,16 @@ def create_conference(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
-
-# Struttura JSON richiesta per la funzione delete_conference:
-# {
-#     "conference_id": 1,  # ID della conferenza da eliminare
-#     "user_id": 1         # ID dell'utente che richiede l'eliminazione
-# }
 @csrf_exempt
 @swagger_auto_schema(
-    method='post',
-    operation_description="Delete a conference by providing the conference_id and user_id.",
+    method='delete',
+    operation_description="Delete a conference by providing the conference_id.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete'),
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user requesting the deletion')
         },
-        required=['conference_id', 'user_id']
+        required=['conference_id']
     ),
     responses={
         200: openapi.Response(description="Conference deleted successfully"),
@@ -113,26 +94,27 @@ def create_conference(request):
         405: openapi.Response(description="Only POST requests are allowed"),
     }
 )
-@api_view(['POST'])
+@api_view(['DELETE'])
+@get_user
 def delete_conference(request):
-    if request.method == 'POST':
+
+    if request.method == 'DELETE':
         try:
             data = json.loads(request.body)
             conference_id = data.get('conference_id')
-            user_id = data.get('user_id')  #`user_id` deve essere fornito per verificare i permessi dell'utente,
+            user = request.user  #`user_id` deve essere fornito per verificare i permessi dell'utente,
             # se l'utente è admin della conferenza, può eliminarla
 
             # Verifica che l'ID della conferenza e l'ID utente siano forniti
             if not conference_id:
                 return JsonResponse({'error': 'Missing conference_id'}, status=400)
-            if not user_id:
-                return JsonResponse({'error': 'Missing user_id'}, status=400)
+
             # Controlla se l'utente ha il ruolo di admin per la conferenza
             try:
                 conference = Conference.objects.get(id=conference_id)
                 is_admin = ConferenceRole.objects.filter(
                     conference=conference,
-                    user_id=user_id,
+                    user=user,
                     role='admin'
                 ).exists()
 
@@ -151,9 +133,6 @@ def delete_conference(request):
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
-
-
 
 @csrf_exempt
 @swagger_auto_schema(
@@ -178,11 +157,12 @@ def delete_conference(request):
     }
 )
 @api_view(['PATCH'])
+@get_user
 def edit_conference(request):
     if request.method == 'PATCH':
         try:
             data = json.loads(request.body)
-            conference_id = data.get('conference_id')
+            conference_id = data.get('id')
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
@@ -198,12 +178,10 @@ def edit_conference(request):
                 return JsonResponse({'error': 'Conference not found'}, status=404)
 
             # Esegui il controllo del ruolo admin per l'utente, come in delete_conference
-            user_id = data.get('user_id')
-            if not user_id:
-                return JsonResponse({'error': 'Missing user_id'}, status=400)
+            user = request.user
             is_admin = ConferenceRole.objects.filter(
                 conference=conference,
-                user_id=user_id,
+                user=user,
                 role='admin'
             ).exists()
             if not is_admin:
@@ -225,67 +203,5 @@ def edit_conference(request):
 
     else:
         return JsonResponse({'error': 'Only PATCH requests are allowed'}, status=405)
-
-
-
-@csrf_exempt
-@swagger_auto_schema(
-    method='delete',
-    operation_description="Delete a conference by providing its ID and the user ID of the admin.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete'),
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user requesting deletion'),
-        },
-        required=['conference_id', 'user_id']
-    ),
-    responses={
-        200: openapi.Response(description="Conference deleted successfully"),
-        400: openapi.Response(description="Missing required fields or invalid JSON"),
-        404: openapi.Response(description="Conference not found"),
-        403: openapi.Response(description="Permission denied"),
-    }
-)
-@api_view(['DELETE'])
-def delete_conference(request):
-    try:
-        data = json.loads(request.body)
-        conference_id = data.get('conference_id')
-        user_id = data.get('user_id')
-
-        # Verifica che i campi richiesti siano presenti
-        if not conference_id or not user_id:
-            return JsonResponse({'error': 'Missing required fields'}, status=400)
-
-        # Verifica che la conferenza esista
-        try:
-            conference = Conference.objects.get(id=conference_id)
-        except Conference.DoesNotExist:
-            return JsonResponse({'error': 'Conference not found'}, status=404)
-
-        # Verifica che l'utente sia un admin della conferenza
-        is_admin = ConferenceRole.objects.filter(
-            conference=conference,
-            user_id=user_id,
-            role='admin'
-        ).exists()
-
-        if not is_admin:
-            return JsonResponse(
-                {'error': 'Permission denied. User is not an admin of this conference.'},
-                status=403
-            )
-
-        # Elimina la conferenza
-        conference.delete()
-        return JsonResponse({'message': 'Conference deleted successfully'}, status=200)
-
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
-
 
 

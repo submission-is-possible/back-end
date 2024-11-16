@@ -6,9 +6,10 @@ from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
 from drf_yasg.utils import swagger_auto_schema
+from users.decorators import get_user
 
 '''  esempio richiesta post
-POST /reviews/get_user_reviews/?page=2&page_size=10
+GET /reviews/get_user_reviews/?page=2&page_size=10
 Content-Type: application/json
 {
     "user_id": 1
@@ -35,15 +36,8 @@ esempio risposta:
 }
 '''
 @swagger_auto_schema(
-    method='post',
+    method='get',
     operation_description="Restituisce una lista di recensioni scritte dall'utente con paginazione.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID dell\'utente'),
-        },
-        required=['user_id'],
-    ),
     responses={
         200: openapi.Response(
             description="Lista di recensioni dell'utente",
@@ -76,28 +70,20 @@ esempio risposta:
         openapi.Parameter('page_size', openapi.IN_QUERY, description="Dimensione della pagina", type=openapi.TYPE_INTEGER),
     ]
 )
-@api_view(['POST'])
+@api_view(['GET'])
 @csrf_exempt
+@get_user
 def get_user_reviews(request):
     """Restituisce una lista di recensioni scritte dall'utente con paginazione."""
 
-    # Verifica che la richiesta sia POST
-    if request.method != 'POST':
-        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+    # Verifica che la richiesta sia GET
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
     
-    # Estrai user_id dal corpo JSON
-    try:
-        data = json.loads(request.body)
-        user_id = data.get("user_id")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-    
-    # Verifica che user_id sia fornito
-    if not user_id:
-        return JsonResponse({"error": "Missing user_id"}, status=400)
+    user = request.user
     
     # Filtra le recensioni per l'utente specificato
-    reviews = Review.objects.filter(user_id=user_id)
+    reviews = Review.objects.filter(user=user)
     
     # Ottieni i parametri di paginazione dall'URL
     page_number = request.GET.get('page', 1)
@@ -129,7 +115,7 @@ def get_user_reviews(request):
 
 
 '''esempio richiesta post
-POST /reviews/get_paper_reviews/?page=2&page_size=10
+GET /reviews/get_paper_reviews/?page=2&page_size=10&paper_id=1
 Content-Type: application/json
 {
     "user_id": 1
@@ -166,18 +152,12 @@ esempio di risposta json della funzione:
 }
 '''
 @swagger_auto_schema(
-    method='post',
+    method='get',
     operation_description="Restituisce una lista di recensioni per un paper specifico con dettagli sugli utenti e paginazione.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=['paper_id'],
-        properties={
-            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID del paper di cui si vogliono ottenere le recensioni')
-        }
-    ),
     manual_parameters=[
         openapi.Parameter('page', openapi.IN_QUERY, description="Numero della pagina per la paginazione", type=openapi.TYPE_INTEGER, default=1),
-        openapi.Parameter('page_size', openapi.IN_QUERY, description="Numero di elementi per pagina", type=openapi.TYPE_INTEGER, default=10)
+        openapi.Parameter('page_size', openapi.IN_QUERY, description="Numero di elementi per pagina", type=openapi.TYPE_INTEGER, default=10),
+        openapi.Parameter('paper_id', openapi.IN_QUERY, description='ID del paper di cui si vogliono ottenere le recensioni',type=openapi.TYPE_INTEGER)
     ],
     responses={
         200: openapi.Response(
@@ -215,22 +195,16 @@ esempio di risposta json della funzione:
         405: "Metodo non permesso"
     }
 )
-@api_view(['POST'])
+@api_view(['GET'])
 @csrf_exempt
 def get_paper_reviews(request): 
     """Restituisce una lista di recensioni di un paper specifico, con dettagli sugli utenti e paginazione."""
 
-    # Verifica che la richiesta sia POST
-    if request.method != 'POST':
-        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+    # Verifica che la richiesta sia GET
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
 
-    # Estrai paper_id dal corpo JSON
-    try:
-        data = json.loads(request.body)
-        paper_id = data.get("paper_id")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
+    paper_id = request.GET.get('paper_id')
     # Verifica che paper_id sia fornito
     if not paper_id:
         return JsonResponse({"error": "Missing paper_id"}, status=400)

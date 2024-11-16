@@ -50,9 +50,17 @@ class PaperTests(TestCase):
         self.valid_paper_data = {
             'title': 'Test Paper',
             'paper_file': self.encoded_pdf,
-            'author': self.user.id,  # Send just the ID
-            'conference': self.conference.id
+            'conference_id': self.conference.id
         }
+
+        # Set up test papers directory
+        self.test_papers_dir = os.path.join(settings.BASE_DIR, 'test_media', 'test_papers')
+        os.makedirs(self.test_papers_dir, exist_ok=True)
+
+        # Mock MEDIA_ROOT for tests
+        self.patcher = patch('django.conf.settings.MEDIA_ROOT', self.test_papers_dir)
+        self.mock_media_root = self.patcher.start()
+
 
         # Set up test papers directory
         self.test_papers_dir = os.path.join(settings.BASE_DIR, 'test_media', 'test_papers')
@@ -66,17 +74,16 @@ class PaperTests(TestCase):
 
     def test_successful_paper_creation(self):
         # Prepare test data
-        paper_data = {
-            'title': 'Test Paper',
-            'paper_file': self.encoded_pdf,
-            'author': self.user.id,
-            'conference': self.conference.id
-        }
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
 
         # Send request
         response = self.client.post(
             reverse('create_paper'),
-            data=json.dumps(paper_data),
+            data=json.dumps(self.valid_paper_data),
             content_type='application/json'
         )
 
@@ -86,6 +93,11 @@ class PaperTests(TestCase):
     def test_missing_fields(self):
         """Test paper creation with missing required fields."""
         # Test missing title
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+
         invalid_data = self.valid_paper_data.copy()
         del invalid_data['title']
         response = self.client.post(
@@ -95,19 +107,9 @@ class PaperTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         
-        # Test missing author_id
-        invalid_data = self.valid_paper_data.copy()
-        del invalid_data['author']
-        response = self.client.post(
-            reverse('create_paper'),
-            data=json.dumps(invalid_data),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 400)
-        
         # Test missing conference_id
         invalid_data = self.valid_paper_data.copy()
-        del invalid_data['conference']
+        del invalid_data['conference_id']
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
@@ -117,20 +119,33 @@ class PaperTests(TestCase):
 
     def test_invalid_author_id(self):
         """Test paper creation with non-existent author ID."""
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = 99999
+        session.save()
+
         invalid_data = self.valid_paper_data.copy()
-        invalid_data['author'] = 99999  # Change to match view's expected field name
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),
             content_type='application/json'
         )
-        self.assertEqual(response.status_code, 404)
-        self.assertIn(b'Author not found', response.content)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b'User not found', response.content)
 
     def test_invalid_conference_id(self):
         """Test paper creation with non-existent conference ID."""
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+        
         invalid_data = self.valid_paper_data.copy()
-        invalid_data['conference'] = 99999  # Non-existent ID
+        invalid_data['conference_id'] = 99999  # Non-existent ID
+        print("accio")
+        print(invalid_data)
         response = self.client.post(
             reverse('create_paper'),
             data=json.dumps(invalid_data),

@@ -16,13 +16,20 @@ class ConferenceCreationTests(TestCase):
             email="admin@example.com",
             password="securepassword"
         )
+        
         self.url = reverse('create_conference')  # Assicurati che l'URL corrisponda al nome dato nella tua configurazione degli URL
 
     def test_create_conference_successful(self):
         """Test per la creazione di una conferenza con dati validi"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         payload = {
             "title": "Test Conference",
-            "admin_id": self.admin_user.id,
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference"
         }
@@ -37,6 +44,13 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_missing_fields(self):
         """Test per mancanza di campi obbligatori"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         payload = {
             "title": "Test Conference",
             "admin_id": self.admin_user.id,
@@ -48,18 +62,30 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_invalid_admin(self):
         """Test per ID admin non valido"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = 9999
+        session.save()
+
         payload = {
             "title": "Test Conference",
-            "admin_id": 9999,  # Un ID che non esiste
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference"
         }
         response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Admin user not found")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "User not found")
 
     def test_create_conference_invalid_json(self):
         """Test per dati JSON non validi"""
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         invalid_json_payload = "This is not JSON"
         response = self.client.post(self.url, data=invalid_json_payload, content_type="application/json")
         self.assertEqual(response.status_code, 400)
@@ -67,6 +93,12 @@ class ConferenceCreationTests(TestCase):
 
     def test_create_conference_invalid_method(self):
         """Test per metodo di richiesta non valido (non POST)"""
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response.json()["detail"], "Method \"GET\" not allowed.")
@@ -97,16 +129,20 @@ class DeleteConferenceTestCase(TestCase):
             role="admin"
         )
 
+        self.url = reverse('delete_conference')
+
         self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
 
     def test_delete_conference_as_admin(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta per eliminare la conferenza
-        response = self.client.post(
-            reverse('delete_conference'),
-            data={'conference_id': self.conference.id, 'user_id': self.user.id},
+        response = self.client.delete(
+            self.url,
+            data={'conference_id': self.conference.id},
             content_type='application/json'
         )
 
@@ -127,14 +163,16 @@ class DeleteConferenceTestCase(TestCase):
 
         # Effettua il login dell'altro utente
         self.client.force_login(other_user)
+        session = self.client.session
+        session['_auth_user_id'] = other_user.id
+        session.save()
 
         # Invia la richiesta per eliminare la conferenza
-        response = self.client.post(
-            reverse('delete_conference'),
-            data={'conference_id': self.conference.id, 'user_id': other_user.id},
+        response = self.client.delete(
+            self.url,
+            data={'conference_id': self.conference.id},
             content_type='application/json'
         )
-
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json(), {'error': 'Permission denied. User is not an admin of this conference.'})
 
@@ -142,12 +180,10 @@ class DeleteConferenceTestCase(TestCase):
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_with_missing_fields(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta senza i campi obbligatori
-        response = self.client.post(
-            reverse('delete_conference'),
+        response = self.client.delete(
+            self.url,
             data={},
             content_type='application/json'
         )
@@ -159,13 +195,11 @@ class DeleteConferenceTestCase(TestCase):
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_with_invalid_json(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta con un JSON non valido
-        response = self.client.post(
-            reverse('delete_conference'),
-            data='invalid json',
+        response = self.client.delete(
+            self.url,
+            data={'this is not a json'},
             content_type='application/json'
         )
 
@@ -176,13 +210,11 @@ class DeleteConferenceTestCase(TestCase):
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_with_non_existent_conference(self):
-        # Effettua il login dell'utente
-        self.client.force_login(self.user)
 
         # Invia la richiesta per eliminare una conferenza inesistente
-        response = self.client.post(
-            reverse('delete_conference'),
-            data={'conference_id': 999, 'user_id': self.user.id},
+        response = self.client.delete(
+            self.url,
+            data={'conference_id': 999},
             content_type='application/json'
         )
 
