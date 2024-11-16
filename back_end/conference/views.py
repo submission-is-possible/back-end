@@ -111,7 +111,7 @@ def delete_conference(request):
 
             # Controlla se l'utente ha il ruolo di admin per la conferenza
             try:
-                conference = Conference.objects.get(conference_id=conference_id)
+                conference = Conference.objects.get(id=conference_id)
                 is_admin = ConferenceRole.objects.filter(
                     conference=conference,
                     user=user,
