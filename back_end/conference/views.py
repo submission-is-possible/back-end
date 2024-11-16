@@ -205,3 +205,65 @@ def edit_conference(request):
         return JsonResponse({'error': 'Only PATCH requests are allowed'}, status=405)
 
 
+
+@csrf_exempt
+@swagger_auto_schema(
+    method='delete',
+    operation_description="Delete a conference by providing its ID and the user ID of the admin.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete'),
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user requesting deletion'),
+        },
+        required=['conference_id', 'user_id']
+    ),
+    responses={
+        200: openapi.Response(description="Conference deleted successfully"),
+        400: openapi.Response(description="Missing required fields or invalid JSON"),
+        404: openapi.Response(description="Conference not found"),
+        403: openapi.Response(description="Permission denied"),
+    }
+)
+@api_view(['DELETE'])
+def delete_conference(request):
+    try:
+        data = json.loads(request.body)
+        conference_id = data.get('conference_id')
+        user_id = data.get('user_id')
+
+        # Verifica che i campi richiesti siano presenti
+        if not conference_id or not user_id:
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+        # Verifica che la conferenza esista
+        try:
+            conference = Conference.objects.get(id=conference_id)
+        except Conference.DoesNotExist:
+            return JsonResponse({'error': 'Conference not found'}, status=404)
+
+        # Verifica che l'utente sia un admin della conferenza
+        is_admin = ConferenceRole.objects.filter(
+            conference=conference,
+            user_id=user_id,
+            role='admin'
+        ).exists()
+
+        if not is_admin:
+            return JsonResponse(
+                {'error': 'Permission denied. User is not an admin of this conference.'},
+                status=403
+            )
+
+        # Elimina la conferenza
+        conference.delete()
+        return JsonResponse({'message': 'Conference deleted successfully'}, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+

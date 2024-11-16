@@ -79,13 +79,51 @@ def create_conference_role(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
+
+'''  esempio richiesta post
+POST /conference_roles/get_user_conferences/?page=2&page_size=10
+Content-Type: application/json
+{
+    "user_id": 1
+}
+
+esempio risposta
+{
+    "current_page": 2,
+    "total_pages": 3,
+    "total_conferences": 25,
+    "conferences": [
+        {
+            "id": 1,
+            "title": "Conference 1",
+            "description": "Description 1",
+            "created_at": "2021-01-01T00:00:00",
+            "deadline": "2021-06-01T00:00:00",
+            "roles": ["admin", "author"]
+        },
+        {
+            "id": 2,
+            "title": "Conference 2",
+            "description": "Description 2",
+            "created_at": "2021-02-01T00:00:00",
+            "deadline": "2021-07-01T00:00:00",
+            "roles": ["reviewer"]
+        },
+        ...
+    ]
+}
+'''
+
+
+
 @csrf_exempt
 @swagger_auto_schema(
     method='get',
     operation_description="Get conferences for a specific user with pagination.",
     responses={
-        200: openapi.Response(description="List of conferences for the user"),
+        200: openapi.Response(description="Conference details or list of conferences for the user"),
         400: openapi.Response(description="Missing user_id or invalid JSON"),
+        404: openapi.Response(description="Conference not found or access denied"),
         405: openapi.Response(description="Only POST requests are allowed")
     }
 )
@@ -101,33 +139,54 @@ def get_user_conferences(request):
     user = request.user #data.get("user_id")
     
 
-    # Estrai il numero di pagina e il limite per la paginazione dai parametri della richiesta
+    # If conference_id is provided, fetch the specific conference
+    if conference_id:
+        try:
+            # Check if the user has a role in the specified conference
+            role = ConferenceRole.objects.get(user_id=user_id, conference_id=conference_id)
+            conference = role.conference
+            conference_data = {
+                "id": conference.id,
+                "title": conference.title,
+                "description": conference.description,
+                "created_at": conference.created_at.isoformat(),
+                "deadline": conference.deadline.isoformat(),
+                "roles": [role.role],
+                "user_id": conference.admin_id.id
+            }
+            return JsonResponse(conference_data, status=200)
+        except ConferenceRole.DoesNotExist:
+            return JsonResponse({"error": "Conference not found or access denied"}, status=404)
+
+    # If conference_id is not provided, proceed to return the list of conferences
+    # Extract page number and page size for pagination from request parameters
     page_number = request.GET.get('page', 1)
     page_size = request.GET.get('page_size', 20)
 
     # Filtra i ruoli conferenza per l'utente specificato e ottieni le conferenze collegate
     user_conferences = ConferenceRole.objects.filter(user=user).select_related('conference')
 
-    # Crea una struttura dati per organizzare conferenze e ruoli
+    # Create a data structure to organize conferences and roles
     conferences_dict = {}
     for role in user_conferences:
-        conference_id = role.conference.id
-        if conference_id not in conferences_dict:
-            conferences_dict[conference_id] = {
+        conf_id = role.conference.id
+        if conf_id not in conferences_dict:
+            conferences_dict[conf_id] = {
                 "id": role.conference.id,
                 "title": role.conference.title,
                 "description": role.conference.description,
                 "created_at": role.conference.created_at.isoformat(),
                 "deadline": role.conference.deadline.isoformat(),
-                "roles": []
+                "roles": [],
+                "user_id": role.conference.admin_id.id
             }
-        conferences_dict[conference_id]["roles"].append(role.role)
+        conferences_dict[conf_id]["roles"].append(role.role)
 
-    # Applica la paginazione
+    # Apply pagination
     paginator = Paginator(list(conferences_dict.values()), page_size)
     page_obj = paginator.get_page(page_number)
 
-    # Crea la risposta con le conferenze per la pagina corrente
+    # Create the response with the conferences for the current page
     response_data = {
         "current_page": page_obj.number,
         "total_pages": paginator.num_pages,
@@ -138,3 +197,5 @@ def get_user_conferences(request):
     print(paginator.count)
 
     return JsonResponse(response_data, status=200)
+
+
