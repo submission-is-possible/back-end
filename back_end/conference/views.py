@@ -157,11 +157,12 @@ def delete_conference(request):
     }
 )
 @api_view(['PATCH'])
+@get_user
 def edit_conference(request):
     if request.method == 'PATCH':
         try:
             data = json.loads(request.body)
-            conference_id = data.get('conference_id')
+            conference_id = data.get('id')
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
@@ -177,12 +178,10 @@ def edit_conference(request):
                 return JsonResponse({'error': 'Conference not found'}, status=404)
 
             # Esegui il controllo del ruolo admin per l'utente, come in delete_conference
-            user_id = data.get('user_id')
-            if not user_id:
-                return JsonResponse({'error': 'Missing user_id'}, status=400)
+            user = request.user
             is_admin = ConferenceRole.objects.filter(
                 conference=conference,
-                user_id=user_id,
+                user=user,
                 role='admin'
             ).exists()
             if not is_admin:
