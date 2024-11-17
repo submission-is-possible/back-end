@@ -2,6 +2,8 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+
+from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
@@ -14,7 +16,7 @@ from rest_framework.decorators import api_view
 @csrf_exempt  # Disabilita temporaneamente il controllo CSRF (per sviluppo locale)
 @swagger_auto_schema(
     method='post',
-    operation_description="Create a new conference with title, admin_id, deadline, and description.",
+    operation_description="Create a new conference with title, admin_id, deadline, description, authors, and reviewers.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
@@ -22,8 +24,10 @@ from rest_framework.decorators import api_view
             'admin_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference admin'),
             'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for the conference'),
             'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the conference'),
+            'authors': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING), description='List of author emails'),
+            'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING), description='List of reviewer emails'),
         },
-        required=['title', 'admin_id', 'deadline', 'description']
+        required=['title', 'admin_id', 'deadline', 'description', 'authors', 'reviewers']
     ),
     responses={
         201: openapi.Response(description="Conference created successfully"),
@@ -40,6 +44,8 @@ from rest_framework.decorators import api_view
 #     "admin_id": 1,  # ID dell'utente che sarà amministratore della conferenza
 #     "deadline": "YYYY-MM-DDTHH:MM:SSZ",  # Data e ora limite della conferenza (formato ISO 8601)
 #     "description": "Descrizione dettagliata della conferenza"
+#     "authors": [], # Lista di email di autori da invitare
+#     "reviewers": [] # Lista di email di revisori da invitare
 # }
 @csrf_exempt
 def create_conference(request):
@@ -52,13 +58,16 @@ def create_conference(request):
             deadline = data.get('deadline')
             description = data.get('description')
 
+            authors = data.get('authors') #lista di email di autori da invitare
+            reviewers = data.get('reviewers') #lista di email di revisori da invitare
+
             # Verifica che i campi richiesti siano presenti
-            if not (title and admin_id and deadline and description):
+            if not (title and admin_id and deadline and description and authors and reviewers):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
 
             # Verifica se l'utente (admin) esiste
             try:
-                admin_user = User.objects.get(id=admin_id)
+                admin_user = User.objects.get(id=admin_id) # Cerca l'utente con l'ID fornito
             except User.DoesNotExist:
                 return JsonResponse({'error': 'Admin user not found'}, status=404)
 
@@ -77,6 +86,44 @@ def create_conference(request):
                 conference=conference,
                 role='admin'
             )
+
+            # Invita gli autori
+            for author_email in authors:
+                try:
+                    author = User.objects.get(email=author_email) #cerca l'utente con l'email fornita
+                except User.DoesNotExist:
+                    return JsonResponse({'error': 'Author user not found'}, status=404)
+                ConferenceRole.objects.create(
+                    user=author,
+                    conference=conference,
+                    role='author'
+                )
+                Notification.objects.create(
+                    user_sender=admin_user, # L'utente admin invia la notifica
+                    user_receiver=author, # L'utente autore riceve la notifica
+                    conference=conference,
+                    status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
+                    type=0  # author type
+                )
+
+            # Invita i revisori
+            for reviewer_email in reviewers:
+                try:
+                    reviewer = User.objects.get(email=reviewer_email)
+                except User.DoesNotExist:
+                    return JsonResponse({'error': 'Reviewer user not found'}, status=404)
+                ConferenceRole.objects.create(
+                    user=reviewer,
+                    conference=conference,
+                    role='reviewer'
+                )
+                Notification.objects.create(
+                    user_sender=admin_user,
+                    user_receiver=reviewer,
+                    conference=conference,
+                    status=0,
+                    type=1  # reviewer type
+                )
             print("sono qui")
             return JsonResponse({
                 'message': 'Conference created successfully',
