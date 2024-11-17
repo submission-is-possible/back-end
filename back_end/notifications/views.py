@@ -123,12 +123,10 @@ def create_notification(request):
                         "id": openapi.Schema(type=openapi.TYPE_INTEGER),
                         "user_sender": openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                             "id": openapi.Schema(type=openapi.TYPE_INTEGER),
-                            "username": openapi.Schema(type=openapi.TYPE_STRING),
                             "email": openapi.Schema(type=openapi.TYPE_STRING)
                         }),
                         "user_receiver": openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                             "id": openapi.Schema(type=openapi.TYPE_INTEGER),
-                            "username": openapi.Schema(type=openapi.TYPE_STRING),
                             "email": openapi.Schema(type=openapi.TYPE_STRING)
                         }),
                         "conference": openapi.Schema(type=openapi.TYPE_OBJECT, properties={
@@ -180,12 +178,10 @@ def get_notifications_received(request):
                 "id": notification.id,
                 "user_sender": {
                     "id": notification.user_sender.id,
-                    "username": notification.user_sender.username,
                     "email": notification.user_sender.email
                 },
                 "user_receiver": {
                     "id": notification.user_receiver.id,
-                    "username": notification.user_receiver.username,
                     "email": notification.user_receiver.email
                 },
                 "conference": {
