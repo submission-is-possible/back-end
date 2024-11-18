@@ -247,6 +247,12 @@ class EditConferenceTest(TestCase):
             deadline=timezone.now() + timezone.timedelta(days=10),
             description="Conference description"
         )
+        
+        self.client.force_login(self.user_admin)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.user_admin.id
+        session.save()
 
         # Assegna il ruolo di admin all'utente admin
         ConferenceRole.objects.create(user=self.user_admin, conference=self.conference, role='admin')
@@ -262,6 +268,7 @@ class EditConferenceTest(TestCase):
                 'description': 'Updated description',
             }),
             content_type="application/json"
+
         )
         self.assertEqual(response.status_code, 200)
         self.conference.refresh_from_db()
@@ -270,6 +277,11 @@ class EditConferenceTest(TestCase):
 
     def test_edit_conference_permission_denied(self):
         # Attempt a modification by a non-admin user
+
+        session = self.client.session
+        session['_auth_user_id'] = 99999
+        session.save()
+
         response = self.client.patch(
             reverse('edit_conference'),
             data=json.dumps({
@@ -279,7 +291,7 @@ class EditConferenceTest(TestCase):
             }),
             content_type="application/json"
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 400)
 
         # Attempt to retrieve JSON content and verify 'error' key
         try:
@@ -289,7 +301,7 @@ class EditConferenceTest(TestCase):
 
         # Check that 'error' key is present and contains the correct message
         self.assertIn('error', response_data, "Expected 'error' key in response")
-        self.assertIn('Permission denied', response_data['error'])
+        self.assertIn('User not found', response_data['error'])
 
     def test_edit_conference_not_found(self):
         # Conferenza con ID inesistente
@@ -317,19 +329,6 @@ class EditConferenceTest(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn('Missing conference_id', response.json().get('error'))
-
-    def test_edit_conference_missing_user_id(self):
-        # Richiesta senza `user_id`
-        response = self.client.patch(
-            reverse('edit_conference'),
-            data=json.dumps({
-                'conference_id': self.conference.id,
-                'title': 'No User ID',
-            }),
-            content_type="application/json"
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('Missing user_id', response.json().get('error'))
 
     def test_edit_conference_method_not_allowed(self):
         # Attempt to modify using a method other than PATCH

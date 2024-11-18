@@ -104,7 +104,7 @@ def delete_conference(request):
             conference_id = data.get('conference_id')
             user = request.user  #`user_id` deve essere fornito per verificare i permessi dell'utente,
             # se l'utente è admin della conferenza, può eliminarla
-
+            
             # Verifica che l'ID della conferenza e l'ID utente siano forniti
             if not conference_id:
                 return JsonResponse({'error': 'Missing conference_id'}, status=400)
@@ -162,7 +162,8 @@ def edit_conference(request):
     if request.method == 'PATCH':
         try:
             data = json.loads(request.body)
-            conference_id = data.get('id')
+            print (data)
+            conference_id = data.get('conference_id')
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
