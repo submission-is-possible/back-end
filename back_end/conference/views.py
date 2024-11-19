@@ -57,12 +57,6 @@ def create_conference(request):
             if not (title and deadline and description):
                 return JsonResponse({'error': 'Missing fields'}, status=400)
 
-            # Verifica se l'utente (admin) esiste
-            try:
-                admin_user = User.objects.get(id=admin_id)
-            except User.DoesNotExist:
-                return JsonResponse({'error': 'Admin user not found'}, status=404)
-
             # Crea la nuova conferenza
             conference = Conference.objects.create(
                 title=title,
