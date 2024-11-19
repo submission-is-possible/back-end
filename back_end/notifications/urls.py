@@ -1,9 +1,9 @@
 from django.urls import path
-from . import views
+from .views import get_notifications_received, create_notification, delete_notification, update_notification
 
 urlpatterns = [
-    path('notifications/create/', views.create_notification, name='create_notification'),
-    path('notifications/get/', views.get_notifications, name='get_notifications'),
-    path('notifications/mark-read/', views.mark_as_read, name='mark_as_read'),
-    path('notifications/delete/', views.delete_notification, name='delete_notification'),
+    path('get-notifications-received/', get_notifications_received, name='get_notifications_received'),
+    path('create-notification/', create_notification, name='create_notification'),
+    path('delete-notification/', delete_notification, name='delete_notification'),
+    path('update-notification/', update_notification, name='update_notification'),
 ]

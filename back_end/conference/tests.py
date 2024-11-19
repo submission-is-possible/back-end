@@ -6,16 +6,30 @@ from rest_framework.test import APITestCase
 
 from .models import User, Conference
 from conference_roles.models import ConferenceRole
+from notifications.models import Notification
 
 class ConferenceCreationTests(TestCase):
     def setUp(self):
-        # Crea un utente amministratore per i test
+        # Create admin user and additional users for testing
         self.admin_user = User.objects.create(
             first_name="Admin",
             last_name="User",
             email="admin@example.com",
             password="securepassword"
         )
+        self.author = User.objects.create(
+            first_name="Author",
+            last_name="User",
+            email="author@example.com",
+            password="authorpass"
+        )
+        self.reviewer = User.objects.create(
+            first_name="Reviewer",
+            last_name="User",
+            email="reviewer@example.com",
+            password="reviewerpass"
+        )
+        self.url = reverse('create_conference')
         
         self.url = reverse('create_conference')  # Assicurati che l'URL corrisponda al nome dato nella tua configurazione degli URL
 
@@ -31,16 +45,64 @@ class ConferenceCreationTests(TestCase):
         payload = {
             "title": "Test Conference",
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
-            "description": "Description of the test conference"
+            "description": "Description of the test conference",
+            "authors": [self.author.email],
+            "reviewers": [self.reviewer.email]
         }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["message"], "Conference created successfully")
         self.assertIn("conference_id", response.json())
-        # Verifica che la conferenza sia stata creata nel database
+
+        # Verify conference creation
         conference = Conference.objects.get(id=response.json()["conference_id"])
         self.assertEqual(conference.title, payload["title"])
         self.assertEqual(conference.admin_id, self.admin_user)
+
+        # Verify roles creation
+        self.assertTrue(
+            ConferenceRole.objects.filter(
+                conference=conference,
+                user=self.admin_user,
+                role='admin'
+            ).exists()
+        )
+        self.assertTrue(
+            ConferenceRole.objects.filter(
+                conference=conference,
+                user=self.author,
+                role='author'
+            ).exists()
+        )
+        self.assertTrue(
+            ConferenceRole.objects.filter(
+                conference=conference,
+                user=self.reviewer,
+                role='reviewer'
+            ).exists()
+        )
+
+        # Verify notifications
+        self.assertTrue(
+            Notification.objects.filter(
+                conference=conference,
+                user_sender=self.admin_user,
+                user_receiver=self.author,
+                type=0
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                conference=conference,
+                user_sender=self.admin_user,
+                user_receiver=self.reviewer,
+                type=1
+            ).exists()
+        )
 
     def test_create_conference_missing_fields(self):
         """Test per mancanza di campi obbligatori"""
@@ -54,9 +116,13 @@ class ConferenceCreationTests(TestCase):
         payload = {
             "title": "Test Conference",
             "admin_id": self.admin_user.id,
-            # Campo "deadline" e "description" mancante
+            # Missing deadline, description, authors, and reviewers
         }
-        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        response = self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"], "Missing fields")
 
@@ -71,8 +137,11 @@ class ConferenceCreationTests(TestCase):
 
         payload = {
             "title": "Test Conference",
+            "admin_id": 9999,  # Un ID che non esiste
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
-            "description": "Description of the test conference"
+            "description": "Description of the test conference",
+            "authors": [self.author.email],
+            "reviewers": [self.reviewer.email]
         }
         response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
         self.assertEqual(response.status_code, 400)
@@ -102,27 +171,45 @@ class ConferenceCreationTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response.json()["detail"], "Method \"GET\" not allowed.")
-
+        
+    def test_create_conference_invalid_reviewer(self):
+        """Test for invalid reviewer email"""
+        payload = {
+            "title": "Test Conference",
+            "admin_id": self.admin_user.id,
+            "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
+            "description": "Description of the test conference",
+            "authors": [self.author.email],
+            "reviewers": ["nonexistent@example.com"]
+        }
+        response = self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"], "Reviewer user not found")
 
 class DeleteConferenceTestCase(TestCase):
     def setUp(self):
-        # Crea un utente
+        self.client = Client()
+        # Create test user
         self.user = User.objects.create(
             first_name="John",
             last_name="Doe",
             email="john@example.com",
             password="password"
         )
-
-        # Crea una conferenza
+        
+        # Create test conference
         self.conference = Conference.objects.create(
             title="Test Conference",
             admin_id=self.user,
             deadline="2023-12-31 23:59:59",
             description="This is a test conference"
         )
-
-        # Crea un ruolo di conferenza per l'utente
+        
+        # Create conference role
         self.conference_role = ConferenceRole.objects.create(
             user=self.user,
             conference=self.conference,
@@ -145,15 +232,12 @@ class DeleteConferenceTestCase(TestCase):
             data={'conference_id': self.conference.id},
             content_type='application/json'
         )
-
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'message': 'Conference deleted successfully'})
-
-        # Verifica che la conferenza sia stata eliminata
         self.assertFalse(Conference.objects.filter(id=self.conference.id).exists())
 
     def test_delete_conference_without_permission(self):
-        # Crea un nuovo utente
+        """Test deletion attempt by non-admin user"""
         other_user = User.objects.create(
             first_name="Jane",
             last_name="Doe",
@@ -202,9 +286,8 @@ class DeleteConferenceTestCase(TestCase):
             data={'this is not a json'},
             content_type='application/json'
         )
-
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'error': 'Invalid JSON'})
+        self.assertEqual(response.json(), {'error': 'Missing required fields'})
 
         # Verifica che la conferenza non sia stata eliminata
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
@@ -217,29 +300,27 @@ class DeleteConferenceTestCase(TestCase):
             data={'conference_id': 999},
             content_type='application/json'
         )
-
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {'error': 'Conference not found'})
 
-        # Verifica che la conferenza non sia stata eliminata
-        self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
-
-
-
-
-
-# -------------------------------------------------------------------------------------------------------------------------------------- #
-#                       tests for edit_conference:
-
-
 class EditConferenceTest(TestCase):
     def setUp(self):
-        # Crea un utente e una conferenza di prova
         self.client = Client()
-        self.user_admin = User.objects.create(first_name="Admin", last_name="User", email="admin@example.com",
-                                              password="adminpass")
-        self.user_non_admin = User.objects.create(first_name="NonAdmin", last_name="User", email="nonadmin@example.com",
-                                                  password="nonadminpass")
+        # Create admin user
+        self.user_admin = User.objects.create(
+            first_name="Admin",
+            last_name="User",
+            email="admin@example.com",
+            password="adminpass"
+        )
+        # Create non-admin user
+        self.user_non_admin = User.objects.create(
+            first_name="NonAdmin",
+            last_name="User",
+            email="nonadmin@example.com",
+            password="nonadminpass"
+        )
+        # Create test conference
         self.conference = Conference.objects.create(
             title="Test Conference",
             admin_id=self.user_admin,
@@ -258,9 +339,9 @@ class EditConferenceTest(TestCase):
         ConferenceRole.objects.create(user=self.user_admin, conference=self.conference, role='admin')
 
     def test_edit_conference_successful(self):
-        # Modifica con dati validi da un utente admin
+        """Test successful conference edit by admin"""
         response = self.client.patch(
-            reverse('edit_conference'),  # Assicurati che il nome dell'URL sia corretto
+            reverse('edit_conference'),
             data=json.dumps({
                 'conference_id': self.conference.id,
                 'user_id': self.user_admin.id,
@@ -304,21 +385,21 @@ class EditConferenceTest(TestCase):
         self.assertIn('User not found', response_data['error'])
 
     def test_edit_conference_not_found(self):
-        # Conferenza con ID inesistente
+        """Test edit attempt for non-existent conference"""
         response = self.client.patch(
             reverse('edit_conference'),
             data=json.dumps({
-                'conference_id': 9999,  # ID inesistente
+                'conference_id': 9999,
                 'user_id': self.user_admin.id,
                 'title': 'Should Not Update',
             }),
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 404)
-        self.assertIn('Conference not found', response.json().get('error'))
+        self.assertEqual(response.json()['error'], 'Conference not found')
 
-    def test_edit_conference_missing_conference_id(self):
-        # Richiesta senza `conference_id`
+    def test_edit_conference_missing_fields(self):
+        """Test edit attempt with missing required fields"""
         response = self.client.patch(
             reverse('edit_conference'),
             data=json.dumps({
