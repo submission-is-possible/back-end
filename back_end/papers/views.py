@@ -70,7 +70,6 @@ def create_paper(request):
 
         paper = Paper(title=title, paper_file=paper_file, author_id=author, conference=conference, status_id='submitted')
         paper.save()
-        print("accio")
         return JsonResponse({'message': 'Paper added successfully',
                              'paper_id': paper.id}, status=201)
     else:

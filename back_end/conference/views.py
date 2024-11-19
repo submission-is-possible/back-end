@@ -39,6 +39,17 @@ from users.decorators import get_user
     }
 )
 @api_view(['POST'])
+
+# Struttura JSON richiesta per la funzione create_conference:
+# {
+#     "title": "Nome della Conferenza",
+#     "admin_id": 1,  # ID dell'utente che sarà amministratore della conferenza
+#     "deadline": "YYYY-MM-DDTHH:MM:SSZ",  # Data e ora limite della conferenza (formato ISO 8601)
+#     "description": "Descrizione dettagliata della conferenza"
+#     "authors": [], # Lista di email di autori da invitare
+#     "reviewers": [] # Lista di email di revisori da invitare
+# }
+@csrf_exempt
 @get_user
 def create_conference(request):
     if request.method == 'POST':
@@ -46,7 +57,6 @@ def create_conference(request):
             # Estrai i dati dal body della richiesta
             data = json.loads(request.body)
             title = data.get('title')
-            admin_user = request.user
             deadline = data.get('deadline')
             description = data.get('description')
 
@@ -55,7 +65,12 @@ def create_conference(request):
 
             # Verifica che i campi richiesti siano presenti
             if not (title and deadline and description):
-                return JsonResponse({'error': 'Missing fields'}, status=400)
+                return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+            if authors is None or reviewers is None:
+                return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
+
+            admin_user = request.user
 
             # Crea la nuova conferenza
             conference = Conference.objects.create(
@@ -74,43 +89,51 @@ def create_conference(request):
             )
 
             # Invita gli autori
-            for author_email in authors:
+            # Invita i revisori (se ci sono)
+            for reviewer in reviewers or []:
+                reviewer_email = reviewer.get('email')  # Ottieni l'email dal dizionario
+                if not reviewer_email:
+                    continue  # Salta se manca l'email
                 try:
-                    author = User.objects.get(email=author_email) #cerca l'utente con l'email fornita
+                    reviewer_user = User.objects.get(email=reviewer_email)
                 except User.DoesNotExist:
-                    return JsonResponse({'error': 'Author user not found'}, status=404)
+                    return JsonResponse({'error': f'Reviewer user not found: {reviewer_email}'}, status=404)
                 ConferenceRole.objects.create(
-                    user=author,
+                    user=reviewer_user,
+                    conference=conference,
+                    role='reviewer'
+                )
+
+                Notification.objects.create(
+                    user_sender=admin_user,  # L'utente admin invia la notifica
+                    user_receiver=reviewer_user,  # Il revisore riceve la notifica
+                    conference=conference,
+                    status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
+                    type=1  # reviewer type
+                )
+
+            for author in authors or []:
+                author_email = author.get('email')  # Ottieni l'email dal dizionario
+                if not author_email:
+                    continue  # Salta se manca l'email
+                try:
+                    author_user = User.objects.get(email=author_email)
+                except User.DoesNotExist:
+                    return JsonResponse({'error': f'Authors user not found: {author_email}'}, status=404)
+                ConferenceRole.objects.create(
+                    user=author_user,
                     conference=conference,
                     role='author'
                 )
                 Notification.objects.create(
-                    user_sender=admin_user, # L'utente admin invia la notifica
-                    user_receiver=author, # L'utente autore riceve la notifica
+                    user_sender=admin_user,  # L'utente admin invia la notifica
+                    user_receiver=author_user,  # L'autore riceve la notifica
                     conference=conference,
                     status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
                     type=0  # author type
                 )
 
-            # Invita i revisori
-            for reviewer_email in reviewers:
-                try:
-                    reviewer = User.objects.get(email=reviewer_email)
-                except User.DoesNotExist:
-                    return JsonResponse({'error': 'Reviewer user not found'}, status=404)
-                ConferenceRole.objects.create(
-                    user=reviewer,
-                    conference=conference,
-                    role='reviewer'
-                )
-                Notification.objects.create(
-                    user_sender=admin_user,
-                    user_receiver=reviewer,
-                    conference=conference,
-                    status=0,
-                    type=1  # reviewer type
-                )
-            print("sono qui")
+
             return JsonResponse({
                 'message': 'Conference created successfully',
                 'conference_id': conference.id

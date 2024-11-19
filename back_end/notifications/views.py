@@ -197,7 +197,9 @@ def get_notifications_received(request):
             }
             for notification in page_obj
         ]
+
     }
+    print(response_data)
     return JsonResponse(response_data, status=200)
 
 
