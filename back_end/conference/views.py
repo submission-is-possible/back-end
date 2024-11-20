@@ -2,7 +2,6 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-
 from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
 from .models import Conference  # Importa il modello Conference creato in precedenza
@@ -12,160 +11,16 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import api_view
 from users.decorators import get_user
+import csv
+import io
 
 
 
-@csrf_exempt  # Disabilita temporaneamente il controllo CSRF (per sviluppo locale)
-@swagger_auto_schema(
-    method='post',
-    operation_description="Create a new conference with title, admin_id, deadline, description, authors, and reviewers.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'title': openapi.Schema(type=openapi.TYPE_STRING, description='Title of the conference'),
-            'admin_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference admin'),
-            'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for the conference'),
-            'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the conference'),
-            'authors': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING), description='List of author emails'),
-            'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING), description='List of reviewer emails'),
-        },
-        required=['title', 'admin_id', 'deadline', 'description', 'authors', 'reviewers']
-    ),
-    responses={
-        201: openapi.Response(description="Conference created successfully"),
-        400: openapi.Response(description="Missing fields or request body is not valid JSON"),
-        404: openapi.Response(description="Admin user not found"),
-        405: openapi.Response(description="Only POST requests are allowed"),
-    }
-)
-@api_view(['POST'])
 
-# Struttura JSON richiesta per la funzione create_conference:
-# {
-#     "title": "Nome della Conferenza",
-#     "admin_id": 1,  # ID dell'utente che sarà amministratore della conferenza
-#     "deadline": "YYYY-MM-DDTHH:MM:SSZ",  # Data e ora limite della conferenza (formato ISO 8601)
-#     "description": "Descrizione dettagliata della conferenza"
-#     "authors": [], # Lista di email di autori da invitare
-#     "reviewers": [] # Lista di email di revisori da invitare
-# }
-@csrf_exempt
-@get_user
-def create_conference(request):
-    if request.method == 'POST':
-        try:
-            # Estrai i dati dal body della richiesta
-            data = json.loads(request.body)
-            title = data.get('title')
-            deadline = data.get('deadline')
-            description = data.get('description')
-
-            authors = data.get('authors') #lista di email di autori da invitare
-            reviewers = data.get('reviewers') #lista di email di revisori da invitare
-
-            # Verifica che i campi richiesti siano presenti
-            if not (title and deadline and description):
-                return JsonResponse({'error': 'Missing required fields'}, status=400)
-
-            if authors is None or reviewers is None:
-                return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
-
-            admin_user = request.user
-
-            # Crea la nuova conferenza
-            conference = Conference.objects.create(
-                title=title,
-                admin_id=admin_user,
-                created_at=timezone.now(),
-                deadline=deadline,
-                description=description
-            )
-
-            # Crea il ruolo di amministratore per l'utente, crea la tupla nella tabella ConferenceRole
-            ConferenceRole.objects.create(
-                user=admin_user,
-                conference=conference,
-                role='admin'
-            )
-
-            # Invita gli autori
-            # Invita i revisori (se ci sono)
-            for reviewer in reviewers or []:
-                reviewer_email = reviewer.get('email')  # Ottieni l'email dal dizionario
-                if not reviewer_email:
-                    continue  # Salta se manca l'email
-                try:
-                    reviewer_user = User.objects.get(email=reviewer_email)
-                except User.DoesNotExist:
-                    return JsonResponse({'error': f'Reviewer user not found: {reviewer_email}'}, status=404)
-                ConferenceRole.objects.create(
-                    user=reviewer_user,
-                    conference=conference,
-                    role='reviewer'
-                )
-
-                Notification.objects.create(
-                    user_sender=admin_user,  # L'utente admin invia la notifica
-                    user_receiver=reviewer_user,  # Il revisore riceve la notifica
-                    conference=conference,
-                    status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
-                    type=1  # reviewer type
-                )
-
-            for author in authors or []:
-                author_email = author.get('email')  # Ottieni l'email dal dizionario
-                if not author_email:
-                    continue  # Salta se manca l'email
-                try:
-                    author_user = User.objects.get(email=author_email)
-                except User.DoesNotExist:
-                    return JsonResponse({'error': f'Authors user not found: {author_email}'}, status=404)
-                ConferenceRole.objects.create(
-                    user=author_user,
-                    conference=conference,
-                    role='author'
-                )
-                Notification.objects.create(
-                    user_sender=admin_user,  # L'utente admin invia la notifica
-                    user_receiver=author_user,  # L'autore riceve la notifica
-                    conference=conference,
-                    status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
-                    type=0  # author type
-                )
-
-
-            return JsonResponse({
-                'message': 'Conference created successfully',
-                'conference_id': conference.id
-            }, status=201)
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    else:
-        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 @csrf_exempt
-@swagger_auto_schema(
-    method='delete',
-    operation_description="Delete a conference by providing the conference_id.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete'),
-        },
-        required=['conference_id']
-    ),
-    responses={
-        200: openapi.Response(description="Conference deleted successfully"),
-        400: openapi.Response(description="Missing conference_id or user_id, or request body is not valid JSON"),
-        403: openapi.Response(description="Permission denied. User is not an admin of this conference."),
-        404: openapi.Response(description="Conference not found"),
-        405: openapi.Response(description="Only POST requests are allowed"),
-    }
-)
-@api_view(['DELETE'])
 @get_user
 def delete_conference(request):
-
     if request.method == 'DELETE':
         try:
             data = json.loads(request.body)
@@ -202,29 +57,8 @@ def delete_conference(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
+
 @csrf_exempt
-@swagger_auto_schema(
-    method='patch',
-    operation_description="Edit (update) a conference by providing its ID and optional fields to update.",
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to update'),
-            'title': openapi.Schema(type=openapi.TYPE_STRING, description='New title of the conference'),
-            'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='New deadline for the conference (ISO format)'),
-            'description': openapi.Schema(type=openapi.TYPE_STRING, description='New description of the conference'),
-        },
-        required=['conference_id']
-    ),
-    responses={
-        200: openapi.Response(description="Conference updated successfully"),
-        400: openapi.Response(description="Missing conference_id or request body is not valid JSON"),
-        404: openapi.Response(description="Conference not found"),
-        403: openapi.Response(description="Permission denied"),
-        405: openapi.Response(description="Only PATCH requests are allowed"),
-    }
-)
-@api_view(['PATCH'])
 @get_user
 def edit_conference(request):
     if request.method == 'PATCH':
@@ -272,5 +106,62 @@ def edit_conference(request):
 
     else:
         return JsonResponse({'error': 'Only PATCH requests are allowed'}, status=405)
+
+@csrf_exempt
+def upload_reviewers_csv(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
+
+    if 'csv_file' not in request.FILES:
+        return JsonResponse({'error': 'No CSV file provided'}, status=400)
+    
+    csv_file = request.FILES['csv_file']
+
+    # Check if file is CSV
+    if not csv_file.name.endswith('.csv'):
+        return JsonResponse({'error': 'File must be a CSV'}, status=400)
+    
+    try:
+        # Try different encodings
+        encodings = ['utf-8', 'utf-8-sig', 'iso-8859-1', 'cp1252']
+        content = None
+        
+        for encoding in encodings:
+            try:
+                # Reset file pointer
+                csv_file.seek(0)
+                content = csv_file.read().decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if content is None:
+            return JsonResponse({'error': 'Unable to decode CSV file'}, status=400)
+        
+        # Try different dialect detection
+        sample = content[:1024]
+        try:
+            dialect = csv.Sniffer().sniff(sample)
+        except csv.Error:
+            dialect = csv.excel
+        
+        csv_reader = csv.reader(io.StringIO(content), dialect)
+        
+        # Extract emails from CSV
+        emails = []
+        for row in csv_reader:
+            if row:  # Check if row is not empty
+                email = row[0].strip()  # Assuming email is in the first column
+                if '@' in email:  # Basic email validation
+                    emails.append(email)
+        
+        if not emails:
+            return JsonResponse({'error': 'No valid email addresses found in CSV'}, status=400)
+            
+        return JsonResponse({'emails': emails})
+    
+    except Exception as e:
+        return JsonResponse({'error': f'Error processing CSV: {str(e)}'}, status=400)
+
 
 
