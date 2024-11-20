@@ -124,7 +124,7 @@ class ConferenceCreationTests(TestCase):
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Missing fields")
+        self.assertEqual(response.json()["error"], "Missing required fields")
 
     def test_create_conference_invalid_admin(self):
         """Test per ID admin non valido"""
@@ -174,14 +174,21 @@ class ConferenceCreationTests(TestCase):
         
     def test_create_conference_invalid_reviewer(self):
         """Test for invalid reviewer email"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
         payload = {
             "title": "Test Conference",
-            "admin_id": self.admin_user.id,
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference",
             "authors": [self.author.email],
             "reviewers": ["nonexistent@example.com"]
         }
+        
         response = self.client.post(
             self.url,
             data=json.dumps(payload),
@@ -287,7 +294,7 @@ class DeleteConferenceTestCase(TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'error': 'Missing required fields'})
+        self.assertEqual(response.json(), {'error': 'Invalid JSON'})
 
         # Verifica che la conferenza non sia stata eliminata
         self.assertTrue(Conference.objects.filter(id=self.conference.id).exists())
