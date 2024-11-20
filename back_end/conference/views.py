@@ -14,7 +14,97 @@ from users.decorators import get_user
 import csv
 import io
 
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'title': openapi.Schema(type=openapi.TYPE_STRING, description='Title of the conference'),
+            'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for submissions'),
+            'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the conference'),
+            'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
+            }))
+        }
+    ),
+    responses={
+        201: openapi.Response('Conference created successfully', openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+            'message': openapi.Schema(type=openapi.TYPE_STRING, description='Success message'),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the created conference')
+        })),
+        400: 'Invalid JSON or missing required fields'
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+@get_user
+def create_conference(request):
+    if request.method == 'POST':
+        try:
+            # Estrai i dati dal body della richiesta
+            data = json.loads(request.body)
+            title = data.get('title')
+            deadline = data.get('deadline')
+            description = data.get('description')
 
+            reviewers = data.get('reviewers') #lista di email di revisori da invitare
+
+            # Verifica che i campi richiesti siano presenti
+            if not (title and deadline and description):
+                return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+            if reviewers is None:
+                return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
+
+            admin_user = request.user
+
+            # Crea la nuova conferenza
+            conference = Conference.objects.create(
+                title=title,
+                admin_id=admin_user,
+                created_at=timezone.now(),
+                deadline=deadline,
+                description=description
+            )
+
+            # Crea il ruolo di amministratore per l'utente, crea la tupla nella tabella ConferenceRole
+            ConferenceRole.objects.create(
+                user=admin_user,
+                conference=conference,
+                role='admin'
+            )
+
+            # Invita i revisori (se ci sono)
+            for reviewer in reviewers or []:
+                reviewer_email = reviewer.get('email')  # Ottieni l'email dal dizionario
+                if not reviewer_email:
+                    continue  # Salta se manca l'email
+                try:
+                    reviewer_user = User.objects.get(email=reviewer_email)
+                except User.DoesNotExist:
+                    return JsonResponse({'error': f'Reviewer user not found: {reviewer_email}'}, status=404)
+                ConferenceRole.objects.create(
+                    user=reviewer_user,
+                    conference=conference,
+                    role='reviewer'
+                )
+
+                Notification.objects.create(
+                    user_sender=admin_user,  # L'utente admin invia la notifica
+                    user_receiver=reviewer_user,  # Il revisore riceve la notifica
+                    conference=conference,
+                    status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
+                    type=1  # reviewer type
+                )
+
+            return JsonResponse({
+                'message': 'Conference created successfully',
+                'conference_id': conference.id
+            }, status=201)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
 
