@@ -117,7 +117,23 @@ def create_conference(request):
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
 
-
+@swagger_auto_schema(
+    method='delete',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to delete')
+        }
+    ),
+    responses={
+        200: 'Conference deleted successfully',
+        400: 'Bad request',
+        403: 'Permission denied',
+        404: 'Conference not found',
+        405: 'Method not allowed'
+    }
+)
+@api_view(['DELETE'])
 @csrf_exempt
 @get_user
 def delete_conference(request):
@@ -157,7 +173,26 @@ def delete_conference(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
-
+@swagger_auto_schema(
+    method='patch',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to edit'),
+            'title': openapi.Schema(type=openapi.TYPE_STRING, description='New title of the conference'),
+            'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='New deadline for submissions'),
+            'description': openapi.Schema(type=openapi.TYPE_STRING, description='New description of the conference')
+        }
+    ),
+    responses={
+        200: 'Conference updated successfully',
+        400: 'Bad request',
+        403: 'Permission denied',
+        404: 'Conference not found',
+        405: 'Method not allowed'
+    }
+)
+@api_view(['PATCH'])
 @csrf_exempt
 @get_user
 def edit_conference(request):
@@ -207,6 +242,26 @@ def edit_conference(request):
     else:
         return JsonResponse({'error': 'Only PATCH requests are allowed'}, status=405)
 
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'csv_file': openapi.Schema(type=openapi.TYPE_FILE, description='CSV file containing reviewer emails')
+        }
+    ),
+    responses={
+        200: openapi.Response('Email addresses extracted successfully', openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'emails': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_STRING, description='Email address'))
+            }
+        )),
+        400: 'Bad request',
+        405: 'Method not allowed'
+    }
+)
+@api_view(['POST'])
 @csrf_exempt
 def upload_reviewers_csv(request):
     if request.method != 'POST':
