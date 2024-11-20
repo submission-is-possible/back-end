@@ -28,11 +28,15 @@ import io
         }
     ),
     responses={
-        201: openapi.Response('Conference created successfully', openapi.Schema(type=openapi.TYPE_OBJECT, properties={
-            'message': openapi.Schema(type=openapi.TYPE_STRING, description='Success message'),
-            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the created conference')
-        })),
-        400: 'Invalid JSON or missing required fields'
+        201: openapi.Response('Conference created successfully', openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'message': openapi.Schema(type=openapi.TYPE_STRING, description='Success message'),
+                'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the created conference')
+            }
+        )),
+        400: 'Bad request',
+        405: 'Method not allowed'
     }
 )
 @api_view(['POST'])
@@ -83,12 +87,18 @@ def create_conference(request):
                     reviewer_user = User.objects.get(email=reviewer_email)
                 except User.DoesNotExist:
                     return JsonResponse({'error': f'Reviewer user not found: {reviewer_email}'}, status=404)
+                
+                #devo assicurarmi che non invito me stesso come revisore, non avrebbe senso
+                if reviewer_user == admin_user:
+                    return JsonResponse({'error': 'Cannot invite yourself as a reviewer'}, status=400)
+                
+                # se sto invitando un revisore, devo assegnarli il ruolo di revisore
                 ConferenceRole.objects.create(
                     user=reviewer_user,
                     conference=conference,
                     role='reviewer'
                 )
-
+                # inoltre devo creare una notifica per il revisore, in modo che possa accettare o rifiutare l'invito
                 Notification.objects.create(
                     user_sender=admin_user,  # L'utente admin invia la notifica
                     user_receiver=reviewer_user,  # Il revisore riceve la notifica
