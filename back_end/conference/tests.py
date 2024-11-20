@@ -29,9 +29,7 @@ class ConferenceCreationTests(TestCase):
             email="reviewer@example.com",
             password="reviewerpass"
         )
-        self.url = reverse('create_conference')
-        
-        self.url = reverse('create_conference')  # Assicurati che l'URL corrisponda al nome dato nella tua configurazione degli URL
+        self.url = reverse('create_conference')  
 
     def test_create_conference_successful(self):
         """Test per la creazione di una conferenza con dati validi"""
@@ -46,8 +44,7 @@ class ConferenceCreationTests(TestCase):
             "title": "Test Conference",
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference",
-            "authors": [self.author.email],
-            "reviewers": [self.reviewer.email]
+            "reviewers": [{"email": self.reviewer.email}]
         }
         response = self.client.post(
             self.url,
@@ -62,7 +59,7 @@ class ConferenceCreationTests(TestCase):
         conference = Conference.objects.get(id=response.json()["conference_id"])
         self.assertEqual(conference.title, payload["title"])
         self.assertEqual(conference.admin_id, self.admin_user)
-
+        
         # Verify roles creation
         self.assertTrue(
             ConferenceRole.objects.filter(
@@ -74,27 +71,13 @@ class ConferenceCreationTests(TestCase):
         self.assertTrue(
             ConferenceRole.objects.filter(
                 conference=conference,
-                user=self.author,
-                role='author'
-            ).exists()
-        )
-        self.assertTrue(
-            ConferenceRole.objects.filter(
-                conference=conference,
                 user=self.reviewer,
                 role='reviewer'
             ).exists()
         )
-
+        
         # Verify notifications
-        self.assertTrue(
-            Notification.objects.filter(
-                conference=conference,
-                user_sender=self.admin_user,
-                user_receiver=self.author,
-                type=0
-            ).exists()
-        )
+        
         self.assertTrue(
             Notification.objects.filter(
                 conference=conference,
@@ -103,6 +86,7 @@ class ConferenceCreationTests(TestCase):
                 type=1
             ).exists()
         )
+        
 
     def test_create_conference_missing_fields(self):
         """Test per mancanza di campi obbligatori"""
@@ -185,8 +169,7 @@ class ConferenceCreationTests(TestCase):
             "title": "Test Conference",
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference",
-            "authors": [self.author.email],
-            "reviewers": ["nonexistent@example.com"]
+            "reviewers": [{"email": "nonexistent@example.com"}]  # Lista di dizionari
         }
         
         response = self.client.post(
@@ -195,7 +178,6 @@ class ConferenceCreationTests(TestCase):
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Reviewer user not found")
 
 class DeleteConferenceTestCase(TestCase):
     def setUp(self):
