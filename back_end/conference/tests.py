@@ -425,3 +425,68 @@ class EditConferenceTest(TestCase):
         self.assertIn('Method', response_data['detail'])
         self.assertIn('not allowed', response_data['detail'])
         '''
+
+class GetConferencesTestCase(TestCase):
+    def setUp(self):
+        # Create a user for admin
+        self.user = User.objects.create(
+            first_name="Test",
+            last_name="Admin",
+            email="test_admin@example.com",
+            password="testpassword"
+        )
+
+        # Create multiple conferences for testing pagination
+        for i in range(25):
+            Conference.objects.create(
+                title=f"Conference {i+1}",
+                admin_id=self.user,
+                created_at=timezone.now(),
+                deadline=timezone.now() + timezone.timedelta(days=10),
+                description=f"Description for Conference {i+1}"
+            )
+
+    def test_get_conferences_default_pagination(self):
+        """Test default pagination (20 conferences per page)"""
+        response = self.client.get(reverse('get_conferences'))
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Parse the response JSON
+        response_data = json.loads(response.content)
+        
+        # Check pagination details
+        self.assertEqual(response_data['current_page'], 1)
+        self.assertEqual(response_data['total_pages'], 2)
+        self.assertEqual(response_data['total_conferences'], 25)
+        self.assertEqual(len(response_data['conferences']), 20)
+
+    def test_get_conferences_specific_page(self):
+        """Test retrieving a specific page"""
+        response = self.client.get(reverse('get_conferences') + '?page=2')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Parse the response JSON
+        response_data = json.loads(response.content)
+        
+        # Check pagination details
+        self.assertEqual(response_data['current_page'], 2)
+        self.assertEqual(response_data['total_pages'], 2)
+        self.assertEqual(response_data['total_conferences'], 25)
+        self.assertEqual(len(response_data['conferences']), 5)
+
+    def test_get_conferences_custom_page_size(self):
+        """Test custom page size"""
+        response = self.client.get(reverse('get_conferences') + '?page_size=10')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Parse the response JSON
+        response_data = json.loads(response.content)
+        
+        # Check pagination details
+        self.assertEqual(response_data['current_page'], 1)
+        self.assertEqual(response_data['total_pages'], 3)
+        self.assertEqual(response_data['total_conferences'], 25)
+        self.assertEqual(len(response_data['conferences']), 10)

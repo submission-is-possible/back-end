@@ -13,6 +13,7 @@ from rest_framework.decorators import api_view
 from users.decorators import get_user
 import csv
 import io
+from django.core.paginator import Paginator
 
 @swagger_auto_schema(
     method='post',
@@ -319,4 +320,44 @@ def upload_reviewers_csv(request):
         return JsonResponse({'error': f'Error processing CSV: {str(e)}'}, status=400)
 
 
+@swagger_auto_schema(
+    method='get',
+    operation_description='Get all conferences using pagination',
+    responses={
+        200: openapi.Response('Conferences retrieved successfully'),
+        404: 'No conferences found',
+        405: 'Method not allowed',
+    }
+)
+@api_view(['GET'])
+@csrf_exempt
+def get_conferences(request):
+    if request.method == 'GET':
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 20)
+    
+        conferences = Conference.objects.all().order_by('created_at')
+        conferences_list = []
+        for conference in conferences:
+            conferences_list.append({
+                'id': conference.id,
+                'title': conference.title,
+                'deadline': conference.deadline,
+                'description': conference.description,
+                'admin_id': conference.admin_id.email,
+                'created_at': conference.created_at
+            })
 
+        paginator = Paginator(conferences_list, page_size)
+        page = paginator.get_page(page_number)
+
+        response_data = {
+            "current_page": page.number,
+            "total_pages": paginator.num_pages,
+            "total_conferences": paginator.count,
+            "conferences": list(page)
+        }
+
+        return JsonResponse(response_data, safe=False, status=200)
+    else:
+        return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
