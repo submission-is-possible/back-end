@@ -3,6 +3,8 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+
+from conference_roles.models import ConferenceRole
 from users.models import User
 from .models import Notification
 from rest_framework.decorators import api_view
