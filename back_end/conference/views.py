@@ -58,6 +58,15 @@ def create_conference(request):
 
             admin_user = request.user
 
+            # Crea la nuova conferenza
+            conference = Conference.objects.create(
+                title=title,
+                admin_id=admin_user,
+                created_at=timezone.now(),
+                deadline=deadline,
+                description=description
+            )
+
             # Crea il ruolo di amministratore per l'utente
             ConferenceRole.objects.create(
                 user=admin_user,
@@ -86,15 +95,6 @@ def create_conference(request):
                     conference=conference,
                     status=0,  # pending
                     type=1  # reviewer type
-                )
-
-                # Crea la nuova conferenza
-                conference = Conference.objects.create(
-                    title=title,
-                    admin_id=admin_user,
-                    created_at=timezone.now(),
-                    deadline=deadline,
-                    description=description
                 )
 
             return JsonResponse({
