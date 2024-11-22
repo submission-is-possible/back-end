@@ -251,15 +251,18 @@ def delete_notification(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
+
 @csrf_exempt
 @swagger_auto_schema(
     methods=['PATCH'],
-    operation_description="Update a notification status and swap sender and receiver.",
+    operation_description="Update a notification status and handle reviewer role assignment",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         properties={
-            'id_notification': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the notification to update'),
-            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New status of the notification (accept/reject)')
+            'id_notification': openapi.Schema(type=openapi.TYPE_INTEGER,
+                                              description='ID of the notification to update'),
+            'status': openapi.Schema(type=openapi.TYPE_STRING,
+                                     description='New status of the notification (accept/reject)')
         },
         required=['id_notification', 'status']
     ),
@@ -294,12 +297,31 @@ def update_notification(request):
             except Notification.DoesNotExist:
                 return JsonResponse({'error': 'Notification not found'}, status=404)
 
+            # Aggiorna la notifica
+            notification.status = status_mapping[status]
+
+            # Se l'invito è stato accettato e si tratta di un invito come reviewer
+            if status == 'accept' and notification.type == 1:
+                # Verifica che non esista già un ruolo per questo utente
+                existing_role = ConferenceRole.objects.filter(
+                    user=notification.user_receiver,
+                    conference=notification.conference,
+                    role='reviewer'
+                ).exists()
+
+                if not existing_role:
+                    # Crea il ruolo di reviewer
+                    ConferenceRole.objects.create(
+                        user=notification.user_receiver,
+                        conference=notification.conference,
+                        role='reviewer'
+                    )
+
+            # Scambia sender e receiver e salva la notifica
             user_sender = notification.user_sender
             user_receiver = notification.user_receiver
             notification.user_sender = user_receiver
             notification.user_receiver = user_sender
-
-            notification.status = status_mapping[status]
             notification.save()
 
             return JsonResponse({'message': 'Notification updated successfully'}, status=200)

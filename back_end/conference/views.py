@@ -15,6 +15,8 @@ import csv
 import io
 from django.core.paginator import Paginator
 
+
+# create_conference view
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
@@ -23,19 +25,15 @@ from django.core.paginator import Paginator
             'title': openapi.Schema(type=openapi.TYPE_STRING, description='Title of the conference'),
             'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for submissions'),
             'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the conference'),
-            'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
-                'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
-            }))
+            'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY,
+                                        items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                                            'email': openapi.Schema(type=openapi.TYPE_STRING,
+                                                                    description='Email of reviewer')
+                                        }))
         }
     ),
     responses={
-        201: openapi.Response('Conference created successfully', openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'message': openapi.Schema(type=openapi.TYPE_STRING, description='Success message'),
-                'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the created conference')
-            }
-        )),
+        201: openapi.Response('Conference created successfully'),
         400: 'Bad request',
         405: 'Method not allowed'
     }
@@ -46,15 +44,12 @@ from django.core.paginator import Paginator
 def create_conference(request):
     if request.method == 'POST':
         try:
-            # Estrai i dati dal body della richiesta
             data = json.loads(request.body)
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
+            reviewers = data.get('reviewers')
 
-            reviewers = data.get('reviewers') #lista di email di revisori da invitare
-
-            # Verifica che i campi richiesti siano presenti
             if not (title and deadline and description):
                 return JsonResponse({'error': 'Missing required fields'}, status=400)
 
@@ -63,49 +58,43 @@ def create_conference(request):
 
             admin_user = request.user
 
-            # Crea la nuova conferenza
-            conference = Conference.objects.create(
-                title=title,
-                admin_id=admin_user,
-                created_at=timezone.now(),
-                deadline=deadline,
-                description=description
-            )
-
-            # Crea il ruolo di amministratore per l'utente, crea la tupla nella tabella ConferenceRole
+            # Crea il ruolo di amministratore per l'utente
             ConferenceRole.objects.create(
                 user=admin_user,
                 conference=conference,
                 role='admin'
             )
 
-            # Invita i revisori (se ci sono)
+            # Invia gli inviti ai revisori
             for reviewer in reviewers or []:
-                reviewer_email = reviewer.get('email')  # Ottieni l'email dal dizionario
+                reviewer_email = reviewer.get('email')
                 if not reviewer_email:
-                    continue  # Salta se manca l'email
+                    continue
+
                 try:
                     reviewer_user = User.objects.get(email=reviewer_email)
                 except User.DoesNotExist:
                     return JsonResponse({'error': f'Reviewer user not found: {reviewer_email}'}, status=404)
-                
-                #devo assicurarmi che non invito me stesso come revisore, non avrebbe senso
+
                 if reviewer_user == admin_user:
                     return JsonResponse({'error': 'Cannot invite yourself as a reviewer'}, status=400)
-                
-                # se sto invitando un revisore, devo assegnarli il ruolo di revisore
-                ConferenceRole.objects.create(
-                    user=reviewer_user,
-                    conference=conference,
-                    role='reviewer'
-                )
-                # inoltre devo creare una notifica per il revisore, in modo che possa accettare o rifiutare l'invito
+
+                # Crea solo la notifica, il ruolo verrà creato dopo l'accettazione
                 Notification.objects.create(
-                    user_sender=admin_user,  # L'utente admin invia la notifica
-                    user_receiver=reviewer_user,  # Il revisore riceve la notifica
+                    user_sender=admin_user,
+                    user_receiver=reviewer_user,
                     conference=conference,
-                    status=0,  # status=0 significa che la notifica è in attesa di risposta (pending)
+                    status=0,  # pending
                     type=1  # reviewer type
+                )
+
+                # Crea la nuova conferenza
+                conference = Conference.objects.create(
+                    title=title,
+                    admin_id=admin_user,
+                    created_at=timezone.now(),
+                    deadline=deadline,
+                    description=description
                 )
 
             return JsonResponse({
