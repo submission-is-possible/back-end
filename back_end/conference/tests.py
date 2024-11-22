@@ -29,17 +29,14 @@ class ConferenceCreationTests(TestCase):
             email="reviewer@example.com",
             password="reviewerpass"
         )
-        self.url = reverse('create_conference')  
+        self.url = reverse('create_conference')
 
     def test_create_conference_successful(self):
         """Test per la creazione di una conferenza con dati validi"""
-
         self.client.force_login(self.admin_user)
-
         session = self.client.session
         session['_auth_user_id'] = self.admin_user.id
         session.save()
-
         payload = {
             "title": "Test Conference",
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
@@ -59,8 +56,8 @@ class ConferenceCreationTests(TestCase):
         conference = Conference.objects.get(id=response.json()["conference_id"])
         self.assertEqual(conference.title, payload["title"])
         self.assertEqual(conference.admin_id, self.admin_user)
-        
-        # Verify roles creation
+
+        # Verify admin role creation
         self.assertTrue(
             ConferenceRole.objects.filter(
                 conference=conference,
@@ -68,22 +65,24 @@ class ConferenceCreationTests(TestCase):
                 role='admin'
             ).exists()
         )
-        self.assertTrue(
-            ConferenceRole.objects.filter(
-                conference=conference,
-                user=self.reviewer,
-                role='reviewer'
-            ).exists()
-        )
-        
-        # Verify notifications
-        
+
+        # Verify notification creation for reviewer
         self.assertTrue(
             Notification.objects.filter(
                 conference=conference,
                 user_sender=self.admin_user,
                 user_receiver=self.reviewer,
-                type=1
+                type=1,  # reviewer type
+                status=0  # pending status
+            ).exists()
+        )
+
+        # Verify no reviewer role is created initially
+        self.assertFalse(
+            ConferenceRole.objects.filter(
+                conference=conference,
+                user=self.reviewer,
+                role='reviewer'
             ).exists()
         )
         
