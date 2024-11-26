@@ -275,3 +275,69 @@ def view_paper_pdf(request, filename):
             
     except Exception as e:
         return JsonResponse({"error": f"Error serving PDF: {str(e)}"}, status=500)
+
+
+
+
+
+
+
+
+@swagger_auto_schema(
+    method='PATCH',
+    operation_description="Update the status of a paper.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New status of the paper')
+        },
+        required=['paper_id', 'status']
+    ),
+    responses={
+        200: openapi.Response(description="Paper status updated successfully"),
+        400: openapi.Response(description="Missing paper_id or status"),
+        403: openapi.Response(description="User is not an admin"),
+        404: openapi.Response(description="Paper not found"),
+        405: openapi.Response(description="Only PATCH requests are allowed")
+    }
+)
+@api_view(['PATCH'])
+@csrf_exempt
+def update_paper_status(request):
+    if request.method != 'PATCH' :
+        return JsonResponse({"error": "Only PATCH requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        paper_id = data.get("paper_id")
+        status = data.get("status")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    if not paper_id or not status:
+        return JsonResponse({"error": "Missing paper_id or status"}, status=400)
+
+    try:
+        paper = Paper.objects.get(id=paper_id)
+    except Paper.DoesNotExist:
+        return JsonResponse({"error": "Paper not found"}, status=404)
+
+    user = request.user
+    #user = User.objects.get(id=1)
+    try:
+        conferenceRole = ConferenceRole.objects.get(user = user, conference_id = paper.conference_id)
+        if conferenceRole.role != 'admin':
+            return JsonResponse({"error": "User is not an admin"}, status=403)
+    except ConferenceRole.DoesNotExist:
+        return JsonResponse({"error": "User is not part of the conference"}, status=404)
+
+    if status not in ['submitted', 'accepted', 'rejected']:
+        return JsonResponse({"error": "Invalid status"}, status=400)
+
+    if (paper.status_id != status):
+        paper.status_id = status
+
+    paper.save()
+    return JsonResponse({"message": "Paper status updated successfully"}, status=200)
+
