@@ -4,6 +4,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
+from papers.models import Paper
+from reviews.models import Review
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
 from drf_yasg import openapi
@@ -350,3 +352,136 @@ def get_conferences(request):
         return JsonResponse(response_data, safe=False, status=200)
     else:
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+    
+
+@csrf_exempt
+@swagger_auto_schema(
+    method='get',
+    operation_description="Get papers for a specific user in a conference based on their role.",
+    manual_parameters=[
+        openapi.Parameter(
+            'page', openapi.IN_QUERY,
+            description="Page number",
+            type=openapi.TYPE_INTEGER
+        ),
+        openapi.Parameter(
+            'page_size', openapi.IN_QUERY,
+            description="Number of items per page",
+            type=openapi.TYPE_INTEGER
+        ),
+    ],
+    responses={
+        200: openapi.Response(description="List of papers based on user's role"),
+        400: openapi.Response(description="Missing parameters or invalid JSON"),
+        403: openapi.Response(description="User not authorized for this conference"),
+        404: openapi.Response(description="Conference not found"),
+        405: openapi.Response(description="Method not allowed")
+    }
+)
+@api_view(['GET'])
+def get_conference_papers_by_user_role(request):
+    """
+    Return papers based on user's role in the conference with pagination.
+    Expects user_id and conference_id in the request body.
+    """
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        conference_id = data.get('conference_id')
+
+        if not user_id or not conference_id:
+            return JsonResponse({
+                "error": "Both user_id and conference_id are required"
+            }, status=400)
+
+        # Get user roles in the conference
+        user_roles = ConferenceRole.objects.filter(
+            user_id=user_id,
+            conference_id=conference_id
+        )
+
+        if not user_roles.exists():
+            return JsonResponse({
+                "error": "User is not associated with this conference"
+            }, status=403)
+
+        # Get papers based on user roles
+        papers_query = None
+        user_roles_list = [role.role for role in user_roles]
+
+        if 'admin' in user_roles_list:
+            # Admin sees all papers in the conference
+            papers_query = Paper.objects.filter(conference_id=conference_id)
+        
+        elif 'reviewer' in user_roles_list:
+            # Reviewer sees papers they've reviewed
+            reviewed_papers = Review.objects.filter(
+                user_id=user_id,
+                paper__conference_id=conference_id
+            ).values_list('paper_id', flat=True)
+            papers_query = Paper.objects.filter(id__in=reviewed_papers)
+        
+        elif 'author' in user_roles_list:
+            # Author sees their own papers
+            papers_query = Paper.objects.filter(
+                conference_id=conference_id,
+                author_id=user_id
+            )
+
+        if papers_query is None:
+            return JsonResponse({
+                "error": "Invalid role configuration"
+            }, status=400)
+
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        
+        paginator = Paginator(papers_query, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        # Prepare paper data
+        papers_data = []
+        for paper in page_obj:
+            paper_data = {
+                "id": paper.id,
+                "title": paper.title,
+                "status": paper.status_id,
+                "author": {
+                    "id": paper.author_id.id,
+                    "name": f"{paper.author_id.first_name} {paper.author_id.last_name}"
+                }
+            }
+            
+            # Add review information if user is a reviewer
+            if 'reviewer' in user_roles_list:
+                review = Review.objects.filter(
+                    paper_id=paper.id,
+                    user_id=user_id
+                ).first()
+                if review:
+                    paper_data["review"] = {
+                        "score": review.score,
+                        "comment": review.comment_text,
+                        "created_at": review.created_at.isoformat()
+                    }
+            
+            papers_data.append(paper_data)
+
+        response_data = {
+            "current_page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "total_papers": paginator.count,
+            "user_roles": user_roles_list,
+            "papers": papers_data
+        }
+
+        return JsonResponse(response_data, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
