@@ -1,12 +1,21 @@
 import json
 from django.core.paginator import Paginator
 from django.http import JsonResponse
+from drf_yasg.openapi import Response
+from rest_framework import status
+
+from papers.models import Paper
+from users.models import User
 from .models import Review
 from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
 from drf_yasg.utils import swagger_auto_schema
 from users.decorators import get_user
+
+import logging
+logger = logging.getLogger(__name__)
+
 
 '''  esempio richiesta post
 GET /reviews/get_user_reviews/?page=2&page_size=10
@@ -244,3 +253,229 @@ def get_paper_reviews(request):
     }
 
     return JsonResponse(response_data, status=200)
+
+
+import re
+## Funzione per rimuovere caratteri speciali dal nome del file
+def sanitize_filename(filename):
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)
+
+
+
+@swagger_auto_schema(
+    method='post',
+    operation_description="Aggiunge una recensione per un paper specifico.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['paper_id', 'user_id', 'comment_text', 'score'],
+        properties={
+            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description="ID del paper"),
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER,
+                                      description="ID dell'utente che ha scritto la recensione"),
+            'comment_text': openapi.Schema(type=openapi.TYPE_STRING, description="Testo della recensione"),
+            'score': openapi.Schema(type=openapi.TYPE_INTEGER, description="Punteggio assegnato al paper (1-5)",
+                                    minimum=1, maximum=5)
+        }
+    ),
+    responses={
+        201: openapi.Response(
+            description="Recensione aggiunta con successo",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'comment_text': openapi.Schema(type=openapi.TYPE_STRING),
+                    'score': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                }
+            )
+        ),
+        400: "Richiesta non valida",
+        404: "Paper o utente non trovato",
+        405: "Metodo non permesso"
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+def create_review(request):
+    """Aggiunge una recensione per un paper specifico."""
+    try:
+        data = request.data
+        paper_id = data.get('paper_id')
+        comment_text = data.get('comment_text')
+        score = data.get('score')
+
+        print("DEBUGGING THE CREATE NOW")
+        print (request)
+
+        if not all([paper_id, comment_text, score]):
+            return JsonResponse({"error": "Tutti i campi sono obbligatori"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not isinstance(score, int) or not 1 <= score <= 5:
+            return JsonResponse({"error": "Lo score deve essere un numero intero tra 1 e 5"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            paper = Paper.objects.get(id=paper_id)
+        except Paper.DoesNotExist:
+            return JsonResponse({"error": "Paper non trovato"}, status=status.HTTP_404_NOT_FOUND)
+
+
+        ##user = request.user
+        # cancella poi, è per forzare l'utente
+        user = User.objects.get(id=data.get('user_id'))
+
+        if Review.objects.filter(paper=paper, user=user).exists():
+            return JsonResponse({"error": "Hai già recensito questo paper"}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = Review.objects.create(paper=paper, user=user, comment_text=comment_text, score=score)
+        return JsonResponse({
+            "id": review.id,
+            "paper_id": review.paper.id,
+            "user_id": review.user.id,
+            "comment_text": review.comment_text,
+            "score": review.score,
+            "created_at": review.created_at.isoformat()
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+
+@swagger_auto_schema(
+    method='patch',
+    operation_description="Aggiorna una recensione esistente.",
+    manual_parameters=[
+        openapi.Parameter(
+            'review_id',
+            openapi.IN_PATH,
+            description="ID della recensione da aggiornare",
+            type=openapi.TYPE_INTEGER,
+            required=True
+        ),
+    ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'comment_text': openapi.Schema(type=openapi.TYPE_STRING, description="Nuovo testo della recensione"),
+            'score': openapi.Schema(type=openapi.TYPE_INTEGER, description="Nuovo punteggio (1-5)",
+                                    minimum=1, maximum=5)
+        }
+    ),
+    responses={
+        200: openapi.Response(
+            description="Recensione aggiornata con successo",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'comment_text': openapi.Schema(type=openapi.TYPE_STRING),
+                    'score': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                }
+            )
+        ),
+        400: "Richiesta non valida",
+        404: "Recensione non trovata",
+        403: "Non autorizzato"
+    }
+)
+@csrf_exempt
+@api_view(['PATCH'])
+def update_review(request, review_id):
+    """Aggiorna una recensione esistente."""
+    try:
+        data = request.data
+        review = Review.objects.get(id=review_id)
+        print("DEBUGGING THE UPDATE NOW")
+        print (request)
+
+
+        # Check for user authorization
+        if request.user.id != review.user.id:
+            return JsonResponse({"error": "Non sei autorizzato a modificare questa recensione"},
+                                status=status.HTTP_403_FORBIDDEN)
+
+
+        # Update fields selectively
+        if 'comment_text' in data:
+            review.comment_text = data['comment_text']
+        if 'score' in data:
+            score = data['score']
+            if not isinstance(score, int) or not 1 <= score <= 5:
+                return JsonResponse({"error": "Lo score deve essere un numero intero tra 1 e 5"},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            review.score = score
+
+        review.save(update_fields=['comment_text', 'score'])  # Save only specific fields
+
+        # Prepare response
+        return JsonResponse({
+            "id": review.id,
+            "paper_id": review.paper.id,
+            "user_id": review.user.id,
+            "comment_text": review.comment_text,
+            "score": review.score,
+            "created_at": review.created_at.isoformat()
+        })
+    except Review.DoesNotExist:
+        return JsonResponse({"error": "Recensione non trovata"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+@swagger_auto_schema(
+    method='delete',
+    operation_description="Elimina una recensione esistente.",
+    manual_parameters=[
+        openapi.Parameter(
+            'review_id',
+            openapi.IN_PATH,
+            description="ID della recensione da eliminare",
+            type=openapi.TYPE_INTEGER,
+            required=True
+        ),
+    ],
+    responses={
+        204: "Recensione eliminata con successo",
+        404: "Recensione non trovata",
+        403: "Non autorizzato"
+    }
+)
+@api_view(['DELETE'])
+@csrf_exempt
+def delete_review(request, review_id):
+    """Elimina una recensione esistente."""
+    try:
+        print("==== DEBUG DELETE REVIEW ====")
+        print(f"Request User: {request.user}")
+        print(f"Request User ID: {request.user.id}")
+        print(f"Is authenticated: {request.user.is_authenticated}")
+
+        review = Review.objects.get(id=review_id)
+        print(f"Review User ID: {review.user.id}")
+        print(f"Are IDs equal?: {request.user.id == review.user.id}")
+        print("========================")
+
+
+
+        if request.user.id != review.user.id:
+            return JsonResponse({"error": "Non sei autorizzato a eliminare questa recensione"},
+                                status=status.HTTP_403_FORBIDDEN)
+
+
+        review.delete()
+        return JsonResponse({}, status=status.HTTP_204_NO_CONTENT)
+
+    except Review.DoesNotExist:
+        return JsonResponse({"error": "Recensione non trovata"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"Exception in delete_review: {str(e)}")
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

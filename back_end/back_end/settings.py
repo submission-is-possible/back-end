@@ -152,3 +152,9 @@ SESSION_COOKIE_SECURE = True  # Set to True if using HTTPS
 SESSION_COOKIE_SAMESITE = 'None'  # Options: 'Lax', 'Strict', or 'None' for cross-site cookies
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Whether the session expires when the user closes their browser
 SESSION_COOKIE_AGE = 1209600  # Age of session cookies, in seconds (2 weeks by default)
+
+
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
