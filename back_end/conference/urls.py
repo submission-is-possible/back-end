@@ -8,5 +8,5 @@ urlpatterns = [
     path('upload_reviewers_csv/', views.upload_reviewers_csv, name='upload_reviewers_csv'),
     path('list/', views.get_conferences, name='get_conferences'),
     
-    path('get_conference_papers_by_user_role/', views.get_conference_papers_by_user_role, name='get_conference_papers_by_user_role'),
+    path('get_paper_inconference_reviewer', views.get_paper_inconference_reviewer, name='get_paper_inconference_reviewer'),
 ]

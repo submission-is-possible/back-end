@@ -354,3 +354,78 @@ def get_conferences(request):
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
     
 
+@csrf_exempt
+@swagger_auto_schema(
+    method='get',
+    operation_description="Get papers reviewed by a specific user in a conference.",
+    manual_parameters=[
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+    ],
+    responses={
+        200: openapi.Response(description="List of reviewed papers"),
+        400: openapi.Response(description="Invalid request"),
+        403: openapi.Response(description="User not authorized"),
+    }
+)
+@api_view(['GET'])
+def get_paper_inconference_reviewer(request):
+    """Return papers reviewed by the user in a specific conference with pagination."""
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        conference_id = data.get('conference_id')
+
+        # Verifica che l'utente sia reviewer nella conferenza
+        is_reviewer = ConferenceRole.objects.filter(
+            user_id=user_id,
+            conference_id=conference_id,
+            role='reviewer'
+        ).exists()
+
+        if not is_reviewer:
+            return JsonResponse({
+                "error": "User is not a reviewer in this conference"
+            }, status=403)
+
+        # Ottieni i paper recensiti
+        reviewed_papers = Review.objects.filter(
+            user_id=user_id,
+            paper__conference_id=conference_id
+        ).select_related('paper', 'paper__author_id')
+
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        paginator = Paginator(reviewed_papers, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        papers_data = [{
+            "id": review.paper.id,
+            "title": review.paper.title,
+            "status": review.paper.status_id,
+            "author": {
+                "id": review.paper.author_id.id,
+                "name": f"{review.paper.author_id.first_name} {review.paper.author_id.last_name}"
+            },
+            "review": {
+                "score": review.score,
+                "comment": review.comment_text,
+                "created_at": review.created_at.isoformat()
+            }
+        } for review in page_obj]
+
+        return JsonResponse({
+            "current_page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "total_papers": paginator.count,
+            "papers": papers_data
+        }, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
