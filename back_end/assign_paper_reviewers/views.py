@@ -5,9 +5,42 @@ from conference.models import Conference
 from papers.models import Paper
 from paper_reviews.models import PaperReviewAssignment
 from users.models import User
+from conference_roles.models import ConferenceRole
+from assign_paper_reviewers.models import PaperReviewer
 import json
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from rest_framework.decorators import api_view
 
+'''
+esempio di richiesta post:
+{
+  "current_user_id": 1,
+  "conference_id": 42,
+  "paper_id": 101,
+  "reviewer_ids": [7, 8, 9]
+}
+'''
 @csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'current_user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the current user'),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
+            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
+            'reviewer_ids': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_INTEGER), description='List of reviewer IDs to be assigned')
+        },
+    ),
+    responses={
+        201: 'Reviewers assigned successfully.',
+        400: 'Bad request: Missing required fields or invalid reviewer IDs.',
+        403: 'Permission denied: Only the conference admin can assign reviewers.',
+        404: 'Not found: Paper not found in this conference.',
+    }
+)
+@api_view(['POST'])
 def assign_reviewers_to_paper(request):
     """
     Assegna uno o più reviewers a un paper di una conferenza.
