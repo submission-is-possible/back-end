@@ -291,6 +291,7 @@ def view_paper_pdf(request, filename):
         properties={
             'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
             'status': openapi.Schema(type=openapi.TYPE_STRING, description='New status of the paper')
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user')
         },
         required=['paper_id', 'status']
     ),
@@ -312,20 +313,22 @@ def update_paper_status(request):
         data = json.loads(request.body)
         paper_id = data.get("paper_id")
         status = data.get("status")
+        user_id = data.get("user_id")
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    if not paper_id or not status:
-        return JsonResponse({"error": "Missing paper_id or status"}, status=400)
+    if not paper_id or not status or not user_id:
+        return JsonResponse({"error": "Missing fields in the request"}, status=400)
 
     try:
         paper = Paper.objects.get(id=paper_id)
     except Paper.DoesNotExist:
         return JsonResponse({"error": "Paper not found"}, status=404)
 
-    user = request.user
+
     #user = User.objects.get(id=1)
     try:
+        user = User.objects.get(id=user_id)
         conferenceRole = ConferenceRole.objects.get(user = user, conference_id = paper.conference_id)
         if conferenceRole.role != 'admin':
             return JsonResponse({"error": "User is not an admin"}, status=403)
