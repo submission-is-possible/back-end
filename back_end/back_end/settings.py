@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'papers',
     'reviews',
     'notifications',
+    'assign_paper_reviewers',
 ]
 
 MIDDLEWARE = [
