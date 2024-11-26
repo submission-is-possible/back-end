@@ -59,6 +59,7 @@ def create_conference(request):
                 return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
 
             admin_user = request.user
+            
 
             # Crea la nuova conferenza
             conference = Conference.objects.create(
@@ -356,28 +357,35 @@ def get_conferences(request):
 
 @csrf_exempt
 @swagger_auto_schema(
-    method='get',
+    method='post',
     operation_description="Get papers reviewed by a specific user in a conference.",
     manual_parameters=[
         openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
         openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
     ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
     responses={
         200: openapi.Response(description="List of reviewed papers"),
         400: openapi.Response(description="Invalid request"),
         403: openapi.Response(description="User not authorized"),
     }
 )
-@api_view(['GET'])
+@api_view(['POST'])
 def get_paper_inconference_reviewer(request):
     """Return papers reviewed by the user in a specific conference with pagination."""
-    if request.method != 'GET':
-        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        data = json.loads(request.body)
-        user_id = data.get('user_id')
-        conference_id = data.get('conference_id')
+        user_id = request.data.get('user_id')
+        conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia reviewer nella conferenza
         is_reviewer = ConferenceRole.objects.filter(
@@ -425,36 +433,40 @@ def get_paper_inconference_reviewer(request):
             "papers": papers_data
         }, status=200)
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    
 
 @csrf_exempt
 @swagger_auto_schema(
-    method='get',
+    method='post',
     operation_description="Get papers authored by a specific user in a conference.",
     manual_parameters=[
         openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
         openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
     ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
     responses={
         200: openapi.Response(description="List of authored papers"),
         400: openapi.Response(description="Invalid request"),
         403: openapi.Response(description="User not authorized"),
     }
 )
-@api_view(['GET'])
+@api_view(['POST'])
 def get_paper_inconference_author(request):
     """Return papers authored by the user in a specific conference with pagination."""
-    if request.method != 'GET':
-        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        data = json.loads(request.body)
-        user_id = data.get('user_id')
-        conference_id = data.get('conference_id')
+        user_id = request.data.get('user_id')
+        conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia author nella conferenza
         is_author = ConferenceRole.objects.filter(
@@ -497,35 +509,40 @@ def get_paper_inconference_author(request):
             "papers": papers_data
         }, status=200)
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
 @csrf_exempt
 @swagger_auto_schema(
-    method='get',
+    method='post',
     operation_description="Get all papers in a conference (admin only).",
     manual_parameters=[
         openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
         openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
     ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
     responses={
         200: openapi.Response(description="List of all conference papers"),
         400: openapi.Response(description="Invalid request"),
         403: openapi.Response(description="User not authorized"),
     }
 )
-@api_view(['GET'])
+@api_view(['POST'])
 def get_paper_inconference_admin(request):
     """Return all papers in a conference for admin with pagination."""
-    if request.method != 'GET':
-        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        data = json.loads(request.body)
-        user_id = data.get('user_id')
-        conference_id = data.get('conference_id')
+        user_id = request.data.get('user_id')
+        conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia admin nella conferenza
         is_admin = ConferenceRole.objects.filter(
@@ -567,7 +584,5 @@ def get_paper_inconference_admin(request):
             "papers": papers_data
         }, status=200)
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
