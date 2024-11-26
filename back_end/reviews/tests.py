@@ -6,6 +6,9 @@ from users.models import User
 from papers.models import Paper
 from conference.models import Conference
 import json
+from django.contrib.auth import get_user_model
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.test import RequestFactory
 
 class GetUserReviewsTest(TestCase):
     def setUp(self):
@@ -66,7 +69,7 @@ class GetUserReviewsTest(TestCase):
             self.url,
             content_type="application/json"
         )
-        
+
         self.assertEqual(response.status_code, 200)
         
         data = response.json()
@@ -235,3 +238,111 @@ class GetPaperReviewsTest(TestCase):
         self.assertEqual(len(data["reviews"]), 7)
         self.assertEqual(data["total_reviews"], 17)
         self.assertEqual(data["total_pages"], 2)
+
+
+
+
+class CreateReviewTest(TestCase):
+    def setUp(self):
+        # Setup esistente rimane invariato
+        self.user = User.objects.create(
+            first_name="Test",
+            last_name="User",
+            email="testuser@example.com",
+            password="testpassword",
+        )
+
+        self.conference = Conference.objects.create(
+            title="Test Conference",
+            admin_id=self.user,
+            created_at=timezone.now(),
+            deadline=timezone.now() + timezone.timedelta(days=30),
+            description="A test conference"
+        )
+
+        self.paper = Paper.objects.create(
+            title="Test Paper",
+            paper_file=None,
+            conference=self.conference,
+            author_id=self.user,
+            status_id="submitted"
+        )
+
+        self.client = Client()
+        self.url = reverse('create_review')
+
+        # Login e setup della sessione
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = str(self.user.id)  # Aggiungiamo la sessione
+        session.save()
+
+        def test_create_review_success(self):
+            data = {
+                "paper_id": self.paper.id,
+                "comment_text": "Great paper!",
+                "score": 5
+            }
+            response = self.client.post(
+                self.url,
+                data=json.dumps(data),
+                content_type="application/json"
+            )
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(Review.objects.count(), 1)
+
+    def test_create_review_invalid_score(self):
+        data = {
+            "paper_id": self.paper.id,
+            "comment_text": "Great paper!",
+            "score": 6
+        }
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_create_review_missing_fields(self):
+        data = {
+            "paper_id": self.paper.id,
+            "score": 5
+        }
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Review.objects.count(), 0)
+
+    def test_create_review_duplicate(self):
+        Review.objects.create(
+            paper=self.paper,
+            user=self.user,
+            comment_text="First review",
+            score=4
+        )
+
+        data = {
+            "paper_id": self.paper.id,
+            "comment_text": "Second review",
+            "score": 5
+        }
+
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Review.objects.count(), 1)
+
+
