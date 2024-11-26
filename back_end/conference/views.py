@@ -429,3 +429,75 @@ def get_paper_inconference_reviewer(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+
+@csrf_exempt
+@swagger_auto_schema(
+    method='get',
+    operation_description="Get papers authored by a specific user in a conference.",
+    manual_parameters=[
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+    ],
+    responses={
+        200: openapi.Response(description="List of authored papers"),
+        400: openapi.Response(description="Invalid request"),
+        403: openapi.Response(description="User not authorized"),
+    }
+)
+@api_view(['GET'])
+def get_paper_inconference_author(request):
+    """Return papers authored by the user in a specific conference with pagination."""
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        conference_id = data.get('conference_id')
+
+        # Verifica che l'utente sia author nella conferenza
+        is_author = ConferenceRole.objects.filter(
+            user_id=user_id,
+            conference_id=conference_id,
+            role='author'
+        ).exists()
+
+        if not is_author:
+            return JsonResponse({
+                "error": "User is not an author in this conference"
+            }, status=403)
+
+        # Ottieni i paper dell'autore
+        authored_papers = Paper.objects.filter(
+            conference_id=conference_id,
+            author_id=user_id
+        )
+
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        paginator = Paginator(authored_papers, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        papers_data = [{
+            "id": paper.id,
+            "title": paper.title,
+            "status": paper.status_id,
+            "author": {
+                "id": paper.author_id.id,
+                "name": f"{paper.author_id.first_name} {paper.author_id.last_name}"
+            }
+        } for paper in page_obj]
+
+        return JsonResponse({
+            "current_page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "total_papers": paginator.count,
+            "papers": papers_data
+        }, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
