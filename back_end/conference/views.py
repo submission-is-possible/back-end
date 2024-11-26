@@ -354,6 +354,152 @@ def get_conferences(request):
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
     
 
+''' esempio json di ritorno della funzione:
+CASO UTENTE AUTHOR
+{
+    "current_page": 1,
+    "total_pages": 1,
+    "total_papers": 2,
+    "user_roles": ["author"],
+    "papers": [
+        {
+            "id": 1,
+            "title": "Machine Learning Applications in Healthcare",
+            "status": "submitted",
+            "author": {
+                "id": 123,
+                "name": "Mario Rossi"
+            }
+        },
+        {
+            "id": 4,
+            "title": "Deep Learning for Image Recognition",
+            "status": "accepted",
+            "author": {
+                "id": 123,
+                "name": "Mario Rossi"
+            }
+        }
+    ]
+}
+
+CASO UTENTE REVIEWER
+{
+    "current_page": 1,
+    "total_pages": 2,
+    "total_papers": 3,
+    "user_roles": ["reviewer"],
+    "papers": [
+        {
+            "id": 2,
+            "title": "Blockchain Technology in Finance",
+            "status": "submitted",
+            "author": {
+                "id": 456,
+                "name": "Giuseppe Verdi"
+            },
+            "review": {
+                "score": 8,
+                "comment": "Excellent analysis of blockchain applications. Some minor improvements needed in methodology section.",
+                "created_at": "2024-11-25T14:30:00Z"
+            }
+        },
+        {
+            "id": 5,
+            "title": "IoT Security Challenges",
+            "status": "rejected",
+            "author": {
+                "id": 789,
+                "name": "Anna Bianchi"
+            },
+            "review": {
+                "score": 4,
+                "comment": "The security analysis lacks depth and current references.",
+                "created_at": "2024-11-24T09:15:00Z"
+            }
+        }
+    ]
+}
+
+CASO UTENTE ADMIN
+{
+    "current_page": 1,
+    "total_pages": 3,
+    "total_papers": 8,
+    "user_roles": ["admin"],
+    "papers": [
+        {
+            "id": 1,
+            "title": "Machine Learning Applications in Healthcare",
+            "status": "submitted",
+            "author": {
+                "id": 123,
+                "name": "Mario Rossi"
+            }
+        },
+        {
+            "id": 2,
+            "title": "Blockchain Technology in Finance",
+            "status": "submitted",
+            "author": {
+                "id": 456,
+                "name": "Giuseppe Verdi"
+            }
+        },
+        {
+            "id": 3,
+            "title": "Cloud Computing Optimization",
+            "status": "accepted",
+            "author": {
+                "id": 789,
+                "name": "Anna Bianchi"
+            }
+        },
+        {
+            "id": 4,
+            "title": "Deep Learning for Image Recognition",
+            "status": "accepted",
+            "author": {
+                "id": 123,
+                "name": "Mario Rossi"
+            }
+        }
+    ]
+}
+
+CASO UTENTE RUOLI MULTIPLI
+{
+    "current_page": 1,
+    "total_pages": 2,
+    "total_papers": 4,
+    "user_roles": ["author", "reviewer"],
+    "papers": [
+        {
+            "id": 1,
+            "title": "Machine Learning Applications in Healthcare",
+            "status": "submitted",
+            "author": {
+                "id": 123,
+                "name": "Mario Rossi"
+            }
+        },
+        {
+            "id": 2,
+            "title": "Blockchain Technology in Finance",
+            "status": "submitted",
+            "author": {
+                "id": 456,
+                "name": "Giuseppe Verdi"
+            },
+            "review": {
+                "score": 8,
+                "comment": "Excellent analysis of blockchain applications.",
+                "created_at": "2024-11-25T14:30:00Z"
+            }
+        }
+    ]
+}
+'''
 @csrf_exempt
 @swagger_auto_schema(
     method='get',
