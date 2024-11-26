@@ -354,7 +354,39 @@ def get_conferences(request):
     else:
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
     
+'''
+Tutti i paper che un reviewer ha recensito in una conferenza Endpoint
+URL: POST /api/conference/papers/reviewer/?page=1&page_size=10
+Request Body:
+{
+    "user_id": 123,
+    "conference_id": 456
+}
 
+Response:
+{
+    "current_page": 1,
+    "total_pages": 3,
+    "total_papers": 25,
+    "papers": [
+        {
+            "id": 1,
+            "title": "Machine Learning Applications in Healthcare",
+            "status": "under_review",
+            "author": {
+                "id": 789,
+                "name": "John Smith"
+            },
+            "review": {
+                "score": 8,
+                "comment": "Well-structured research with solid methodology",
+                "created_at": "2024-11-20T14:30:00Z"
+            }
+        },
+        // ... altri paper
+    ]
+}
+'''
 @csrf_exempt
 @swagger_auto_schema(
     method='post',
@@ -436,6 +468,34 @@ def get_paper_inconference_reviewer(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
+'''
+paper che un Author ha submittato nella conferenza Endpoint
+URL: POST /api/conference/papers/author/?page=1&page_size=10
+Request Body:
+{
+    "user_id": 789,
+    "conference_id": 456
+}
+
+Response:
+{
+    "current_page": 1,
+    "total_pages": 2,
+    "total_papers": 15,
+    "papers": [
+        {
+            "id": 1,
+            "title": "Neural Networks in Natural Language Processing",
+            "status": "accepted",
+            "author": {
+                "id": 789,
+                "name": "John Smith"
+            }
+        },
+        // ... altri paper
+    ]
+}
+'''
 @csrf_exempt
 @swagger_auto_schema(
     method='post',
@@ -512,6 +572,34 @@ def get_paper_inconference_author(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
+'''
+Admin Endpoint --> ritorna tutti i paper di quella conferenza
+URL: POST /api/conference/papers/admin/?page=1&page_size=10
+Request Body:
+{
+    "user_id": 999,
+    "conference_id": 456
+}
+
+Response:
+{
+    "current_page": 1,
+    "total_pages": 5,
+    "total_papers": 50,
+    "papers": [
+        {
+            "id": 1,
+            "title": "Blockchain Applications in Supply Chain",
+            "status": "under_review",
+            "author": {
+                "id": 789,
+                "name": "John Smith"
+            }
+        },
+        // ... altri paper
+    ]
+}
+'''
 @csrf_exempt
 @swagger_auto_schema(
     method='post',
