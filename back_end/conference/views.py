@@ -447,10 +447,7 @@ def get_paper_inconference_reviewer(request):
             "id": review.paper.id,
             "title": review.paper.title,
             "status": review.paper.status_id,
-            "author": {
-                "id": review.paper.author_id.id,
-                "name": f"{review.paper.author_id.first_name} {review.paper.author_id.last_name}"
-            },
+            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
             "review": {
                 "score": review.score,
                 "comment": review.comment_text,
@@ -556,10 +553,7 @@ def get_paper_inconference_author(request):
             "id": paper.id,
             "title": paper.title,
             "status": paper.status_id,
-            "author": {
-                "id": paper.author_id.id,
-                "name": f"{paper.author_id.first_name} {paper.author_id.last_name}"
-            }
+            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
         } for paper in page_obj]
 
         return JsonResponse({
@@ -659,10 +653,7 @@ def get_paper_inconference_admin(request):
             "id": paper.id,
             "title": paper.title,
             "status": paper.status_id,
-            "author": {
-                "id": paper.author_id.id,
-                "name": f"{paper.author_id.first_name} {paper.author_id.last_name}"
-            }
+            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
         } for paper in page_obj]
 
         return JsonResponse({
