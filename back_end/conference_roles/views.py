@@ -223,7 +223,7 @@ def assign_author_role(request):
                 return JsonResponse({'error': 'Conference not found'}, status=404)
 
             # Crea la nuova tupla nella tabella ConferenceRole
-            conference_role = ConferenceRole.objects.create(
+            conference_role = ConferenceRole.objects.get_or_create(
                 user=user,
                 conference=conference,
                 role='author'
