@@ -290,7 +290,7 @@ def view_paper_pdf(request, filename):
         type=openapi.TYPE_OBJECT,
         properties={
             'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
-            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New status of the paper')
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New status of the paper'),
             'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user')
         },
         required=['paper_id', 'status']
