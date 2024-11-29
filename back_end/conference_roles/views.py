@@ -230,8 +230,7 @@ def assign_author_role(request):
             )
 
             return JsonResponse({
-                'message': 'Role assigned successfully',
-                'conference_role_id': conference_role.id
+                'message': 'Role assigned successfully'
             }, status=201)
 
         except json.JSONDecodeError:
