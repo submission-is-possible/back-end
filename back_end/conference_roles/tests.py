@@ -148,3 +148,74 @@ class GetUserConferencesTests(TestCase):
         self.assertEqual(response.status_code, 405)
         #self.assertEqual(response.json()["error"], "Only POST requests are allowed")
         self.assertEqual(response.json(), {"detail": "Method \"POST\" not allowed."})
+
+class Assign_author_role(TestCase):
+    def setUp(self):
+        # Crea un utente e una conferenza per i test
+        self.user = User.objects.create(
+            first_name="Mario",
+            last_name="Rossi",
+            email="mariorossi@gmail.com",
+            password="password123"
+        )
+        self.conference = Conference.objects.create(
+            title="AI Conference",
+            admin_id=self.user,
+            deadline=timezone.now() + timezone.timedelta(days=30),
+            description="A conference on AI advancements."
+        )
+        self.url = reverse('assign_author_role')
+
+    def test_assign_author_role_successful(self):
+        """Test per assegnare il ruolo di autore a un utente per una conferenza specifica"""
+        payload = {
+            "id_user": self.user.id,
+            "id_conference": self.conference.id
+        }
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 201)
+
+        # Verifica che il ruolo sia stato creato nel database
+        self.assertTrue(ConferenceRole.objects.filter(user=self.user, conference=self.conference, role="author").exists())
+
+    def test_assign_author_role_missing_fields(self):
+        """Test per mancanza di campi obbligatori"""
+        payload = {
+            "id_conference": self.conference.id  # Manca id_user
+        }
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_assign_author_role_user_not_found(self):
+        """Test per ID utente non valido"""
+        payload = {
+            "id_user": 9999,  # ID utente non esistente
+            "id_conference": self.conference.id
+        }
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"], "User not found")
+
+    def test_assign_author_role_conference_not_found(self):
+        """Test per ID conferenza non valido"""
+        payload = {
+            "id_user": self.user.id,
+            "id_conference": 9999,  # ID conferenza non esistente
+        }
+        response = self.client.post(self.url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"], "Conference not found")
+
+    def test_assign_author_role_invalid_json(self):
+        """Test per dati JSON non validi"""
+        invalid_json_payload = "This is not JSON"
+        response = self.client.post(self.url, data=invalid_json_payload, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "Invalid JSON")
+
+    def test_assign_author_role_invalid_method(self):
+        """Test per metodo di richiesta non valido (non POST)"""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.json(), {"detail": "Method \"GET\" not allowed."})
+

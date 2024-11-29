@@ -4,6 +4,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
+from papers.models import Paper
+from reviews.models import Review
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
 from drf_yasg import openapi
@@ -57,6 +59,7 @@ def create_conference(request):
                 return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
 
             admin_user = request.user
+            
 
             # Crea la nuova conferenza
             conference = Conference.objects.create(
@@ -350,3 +353,315 @@ def get_conferences(request):
         return JsonResponse(response_data, safe=False, status=200)
     else:
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
+    
+'''
+Tutti i paper che un reviewer ha recensito in una conferenza Endpoint
+URL: POST /api/conference/papers/reviewer/?page=1&page_size=10
+Request Body:
+{
+    "user_id": 123,
+    "conference_id": 456
+}
+
+Response:
+{
+    "current_page": 1,
+    "total_pages": 3,
+    "total_papers": 25,
+    "papers": [
+        {
+            "id": 1,
+            "title": "Machine Learning Applications in Healthcare",
+            "status": "under_review",
+            "author": {
+                "id": 789,
+                "name": "John Smith"
+            },
+            "review": {
+                "score": 8,
+                "comment": "Well-structured research with solid methodology",
+                "created_at": "2024-11-20T14:30:00Z"
+            }
+        },
+        // ... altri paper
+    ]
+}
+'''
+@csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Get papers reviewed by a specific user in a conference.",
+    manual_parameters=[
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+    ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
+    responses={
+        200: openapi.Response(description="List of reviewed papers"),
+        400: openapi.Response(description="Invalid request"),
+        403: openapi.Response(description="User not authorized"),
+    }
+)
+@api_view(['POST'])
+def get_paper_inconference_reviewer(request):
+    """Return papers reviewed by the user in a specific conference with pagination."""
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        user_id = request.data.get('user_id')
+        conference_id = request.data.get('conference_id')
+
+        # Verifica che l'utente sia reviewer nella conferenza
+        is_reviewer = ConferenceRole.objects.filter(
+            user_id=user_id,
+            conference_id=conference_id,
+            role='reviewer'
+        ).exists()
+
+        if not is_reviewer:
+            return JsonResponse({
+                "error": "User is not a reviewer in this conference"
+            }, status=403)
+
+        # Ottieni i paper recensiti
+        reviewed_papers = Review.objects.filter(
+            user_id=user_id,
+            paper__conference_id=conference_id
+        ).select_related('paper', 'paper__author_id')
+
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        paginator = Paginator(reviewed_papers, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        papers_data = [{
+            "id": review.paper.id,
+            "title": review.paper.title,
+            "status": review.paper.status_id,
+            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
+            "review": {
+                "score": review.score,
+                "comment": review.comment_text,
+                "created_at": review.created_at.isoformat()
+            }
+        } for review in page_obj]
+
+        return JsonResponse({
+            "current_page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "total_papers": paginator.count,
+            "papers": papers_data
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+'''
+paper che un Author ha submittato nella conferenza Endpoint
+URL: POST /api/conference/papers/author/?page=1&page_size=10
+Request Body:
+{
+    "user_id": 789,
+    "conference_id": 456
+}
+
+Response:
+{
+    "current_page": 1,
+    "total_pages": 2,
+    "total_papers": 15,
+    "papers": [
+        {
+            "id": 1,
+            "title": "Neural Networks in Natural Language Processing",
+            "status": "accepted",
+            "author": {
+                "id": 789,
+                "name": "John Smith"
+            }
+        },
+        // ... altri paper
+    ]
+}
+'''
+@csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Get papers authored by a specific user in a conference.",
+    manual_parameters=[
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+    ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
+    responses={
+        200: openapi.Response(description="List of authored papers"),
+        400: openapi.Response(description="Invalid request"),
+        403: openapi.Response(description="User not authorized"),
+    }
+)
+@api_view(['POST'])
+def get_paper_inconference_author(request):
+    """Return papers authored by the user in a specific conference with pagination."""
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        user_id = request.data.get('user_id')
+        conference_id = request.data.get('conference_id')
+
+        # Verifica che l'utente sia author nella conferenza
+        is_author = ConferenceRole.objects.filter(
+            user_id=user_id,
+            conference_id=conference_id,
+            role='author'
+        ).exists()
+
+        if not is_author:
+            return JsonResponse({
+                "error": "User is not an author in this conference"
+            }, status=403)
+
+        # Ottieni i paper dell'autore
+        authored_papers = Paper.objects.filter(
+            conference_id=conference_id,
+            author_id=user_id
+        )
+
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        paginator = Paginator(authored_papers, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        papers_data = [{
+            "id": paper.id,
+            "title": paper.title,
+            "status": paper.status_id,
+            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
+        } for paper in page_obj]
+
+        return JsonResponse({
+            "current_page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "total_papers": paginator.count,
+            "papers": papers_data
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+'''
+Admin Endpoint --> ritorna tutti i paper di quella conferenza
+URL: POST /api/conference/papers/admin/?page=1&page_size=10
+Request Body:
+{
+    "user_id": 999,
+    "conference_id": 456
+}
+
+Response:
+{
+    "current_page": 1,
+    "total_pages": 5,
+    "total_papers": 50,
+    "papers": [
+        {
+            "id": 1,
+            "title": "Blockchain Applications in Supply Chain",
+            "status": "under_review",
+            "author": {
+                "id": 789,
+                "name": "John Smith"
+            }
+        },
+        // ... altri paper
+    ]
+}
+'''
+@csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Get all papers in a conference (admin only).",
+    manual_parameters=[
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+    ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
+    responses={
+        200: openapi.Response(description="List of all conference papers"),
+        400: openapi.Response(description="Invalid request"),
+        403: openapi.Response(description="User not authorized"),
+    }
+)
+@api_view(['POST'])
+def get_paper_inconference_admin(request):
+    """Return all papers in a conference for admin with pagination."""
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        user_id = request.data.get('user_id')
+        conference_id = request.data.get('conference_id')
+
+        # Verifica che l'utente sia admin nella conferenza
+        is_admin = ConferenceRole.objects.filter(
+            user_id=user_id,
+            conference_id=conference_id,
+            role='admin'
+        ).exists()
+
+        if not is_admin:
+            return JsonResponse({
+                "error": "User is not an admin in this conference"
+            }, status=403)
+
+        # Ottieni tutti i paper della conferenza
+        all_papers = Paper.objects.filter(
+            conference_id=conference_id
+        ).select_related('author_id')
+
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 10)
+        paginator = Paginator(all_papers, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        papers_data = [{
+            "id": paper.id,
+            "title": paper.title,
+            "status": paper.status_id,
+            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
+        } for paper in page_obj]
+
+        return JsonResponse({
+            "current_page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "total_papers": paginator.count,
+            "papers": papers_data
+        }, status=200)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
