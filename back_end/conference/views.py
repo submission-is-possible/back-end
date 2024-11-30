@@ -410,13 +410,14 @@ Response:
     }
 )
 @api_view(['POST'])
+@get_user
 def get_paper_inconference_reviewer(request):
     """Return papers reviewed by the user in a specific conference with pagination."""
     if request.method != 'POST':
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        user_id = request.data.get('user_id')
+        user_id = request.user.id
         conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia reviewer nella conferenza
@@ -447,7 +448,8 @@ def get_paper_inconference_reviewer(request):
             "id": review.paper.id,
             "title": review.paper.title,
             "status": review.paper.status_id,
-            "author": paper.author_id.last_name + " " + paper.author_id.first_name,
+            #"author": paper.author_id.last_name + " " + paper.author_id.first_name,
+            #"paper_file": paper.paper_file.url if paper.paper_file else None,
             "review": {
                 "score": review.score,
                 "comment": review.comment_text,
@@ -516,13 +518,14 @@ Response:
     }
 )
 @api_view(['POST'])
+@get_user
 def get_paper_inconference_author(request):
     """Return papers authored by the user in a specific conference with pagination."""
     if request.method != 'POST':
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        user_id = request.data.get('user_id')
+        user_id = request.user.id
         conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia author nella conferenza
@@ -554,6 +557,7 @@ def get_paper_inconference_author(request):
             "title": paper.title,
             "status": paper.status_id,
             "author": paper.author_id.last_name + " " + paper.author_id.first_name,
+            "paper_file": paper.paper_file.url if paper.paper_file else None,
         } for paper in page_obj]
 
         return JsonResponse({
@@ -617,13 +621,14 @@ Response:
     }
 )
 @api_view(['POST'])
+@get_user
 def get_paper_inconference_admin(request):
     """Return all papers in a conference for admin with pagination."""
     if request.method != 'POST':
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        user_id = request.data.get('user_id')
+        user_id = request.user.id
         conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia admin nella conferenza
@@ -654,6 +659,7 @@ def get_paper_inconference_admin(request):
             "title": paper.title,
             "status": paper.status_id,
             "author": paper.author_id.last_name + " " + paper.author_id.first_name,
+            "paper_file": paper.paper_file.url if paper.paper_file else None,
         } for paper in page_obj]
 
         return JsonResponse({
