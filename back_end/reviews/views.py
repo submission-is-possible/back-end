@@ -479,3 +479,52 @@ def delete_review(request, review_id):
     except Exception as e:
         print(f"Exception in delete_review: {str(e)}")
         return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+## function that given a review ID, returns the score
+
+
+@swagger_auto_schema(
+    method='get',
+    operation_description="Restituisce il punteggio di una recensione dato il suo ID.",
+    manual_parameters=[
+        openapi.Parameter(
+            'review_id',
+            openapi.IN_PATH,
+            description="ID della recensione di cui si vuole ottenere il punteggio",
+            type=openapi.TYPE_INTEGER,
+            required=True
+        ),
+    ],
+    responses={
+        200: openapi.Response(
+            description="Punteggio della recensione",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'score': openapi.Schema(type=openapi.TYPE_INTEGER, description="Punteggio della recensione")
+                }
+            )
+        ),
+        404: "Recensione non trovata",
+        400: "Richiesta non valida"
+    }
+)
+@api_view(['GET'])
+@csrf_exempt
+def get_review_score(request, review_id):
+    """Restituisce il punteggio di una recensione dato il suo ID."""
+    try:
+        # Recupera la recensione tramite l'ID
+        review = Review.objects.get(id=review_id)
+
+        # Prepara e restituisce la risposta con il punteggio
+        return JsonResponse({"score": review.score}, status=status.HTTP_200_OK)
+    except Review.DoesNotExist:
+        # Se la recensione non esiste, restituisce un errore 404
+        return JsonResponse({"error": "Recensione non trovata"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        # Per eventuali altri errori, restituisce un errore generico
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
