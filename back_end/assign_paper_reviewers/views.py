@@ -1,16 +1,17 @@
 from django.http import JsonResponse
+import json
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
-from conference.models import Conference
-from papers.models import Paper
-from paper_reviews.models import PaperReviewAssignment
-from users.models import User
-from conference_roles.models import ConferenceRole
-from assign_paper_reviewers.models import PaperReviewer
-import json
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
+
+from conference.models import Conference
+from papers.models import Paper
+from assign_paper_reviewers.models import PaperReviewAssignment
+from users.models import User
+from conference_roles.models import ConferenceRole
+
 
 '''
 esempio di richiesta post:
@@ -82,7 +83,7 @@ def assign_reviewer_to_paper(request):
         return JsonResponse({"error": "Paper not found in this conference."}, status=400)
 
     # Assegno il reviewer al paper
-    PaperReviewer.objects.create(
+    PaperReviewAssignment.objects.create(
         reviewer=reviewer,
         paper=paper,
         conference=conference,
@@ -165,7 +166,7 @@ def remove_reviewer_from_paper(request):
         return JsonResponse({"error": "Paper not found in this conference."}, status=400)
 
     # Rimuovo il reviewer dal paper
-    PaperReviewer.objects.filter(
+    PaperReviewAssignment.objects.filter(
         reviewer=reviewer,
         paper=paper,
         conference=conference
