@@ -18,7 +18,7 @@ esempio di richiesta post:
   "current_user_id": 1,
   "conference_id": 42,
   "paper_id": 101,
-  "reviewer_ids": [7, 8, 9]
+  "reviewer_email": desanti@gmail.com
 }
 '''
 @csrf_exempt
@@ -30,18 +30,18 @@ esempio di richiesta post:
             'current_user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the current user'),
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
             'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
-            'reviewer_ids': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Items(type=openapi.TYPE_INTEGER), description='List of reviewer IDs to be assigned')
+            'reviewer_email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of the reviewer')
         },
     ),
     responses={
         201: 'Reviewers assigned successfully.',
-        400: 'Bad request: Missing required fields or invalid reviewer IDs.',
+        400: 'Bad request: Missing required fields.',
         403: 'Permission denied: Only the conference admin can assign reviewers.',
         404: 'Not found: Paper not found in this conference.',
     }
 )
 @api_view(['POST'])
-def assign_reviewers_to_paper(request):
+def assign_reviewer_to_paper(request):
     """
     Assegna uno o più reviewers a un paper di una conferenza.
     """
@@ -49,10 +49,10 @@ def assign_reviewers_to_paper(request):
     current_user_id = data.get("current_user_id")
     conference_id = data.get("conference_id")
     paper_id = data.get("paper_id")
-    reviewer_ids = data.get("reviewer_ids")
+    reviewer_email = data.get("reviewer_email")
 
     # Controllo dei dati obbligatori
-    if not all([current_user_id, conference_id, paper_id, reviewer_ids]):
+    if not all([current_user_id, conference_id, paper_id, reviewer_email]):
         return JsonResponse({"error": "Missing required fields."}, status=400)
 
     # Controllo se l'utente corrente è l'admin della conferenza
@@ -61,17 +61,19 @@ def assign_reviewers_to_paper(request):
     except Conference.DoesNotExist:
         return JsonResponse({"error": "Unauthorized. Only the admin can assign reviewers."}, status=403)
 
-    # Controllo se tutti i reviewer_ids sono reviewer nella conferenza
-    valid_reviewers = ConferenceRole.objects.filter(
-        conference=conference, role='reviewer', user_id__in=reviewer_ids
-    ).values_list('user_id', flat=True)
+    # Trovo l'utente tramite l'email
+    try:
+        reviewer = User.objects.get(email=reviewer_email)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Reviewer not found."}, status=404)
+    
+    # Controllo se l'utente è un reviewer nella conferenza
+    is_reviewer = ConferenceRole.objects.filter(
+        conference=conference, role='reviewer', user=reviewer
+    ).exists()
 
-    invalid_reviewers = set(reviewer_ids) - set(valid_reviewers)
-    if invalid_reviewers:
-        return JsonResponse(
-            {"error": f"Invalid reviewer IDs: {list(invalid_reviewers)}"},
-            status=400
-        )
+    if not is_reviewer:
+        return JsonResponse({"error": "User is not a reviewer for this conference."}, status=400)
 
     # Verifico l'esistenza del paper
     try:
@@ -79,22 +81,16 @@ def assign_reviewers_to_paper(request):
     except Paper.DoesNotExist:
         return JsonResponse({"error": "Paper not found in this conference."}, status=400)
 
-    # Assegno i reviewers al paper
-    assignments = []
-    for reviewer_id in reviewer_ids:
-        PaperReviewer.objects.create(
-            reviewer_id=reviewer_id,
-            paper=paper,
-            conference=conference,
-            status="assigned"
-        )
-        assignments.append({
-            "reviewer_id": reviewer_id,
-            "status": "assigned"
-        })
+    # Assegno il reviewer al paper
+    PaperReviewer.objects.create(
+        reviewer=reviewer,
+        paper=paper,
+        conference=conference,
+        status="assigned"
+    )
 
     return JsonResponse(
         {
-            "message": "Reviewers assigned successfully.",
-            "assignments": assignments
+            "message": "Reviewers assigned successfully."
         },status=201)
+
