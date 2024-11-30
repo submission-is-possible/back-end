@@ -306,7 +306,7 @@ def view_paper_pdf(request, filename):
 @api_view(['PATCH'])
 @csrf_exempt
 def update_paper_status(request):
-    if request.method != 'PATCH' :
+    if request.method != 'PATCH':
         return JsonResponse({"error": "Only PATCH requests are allowed"}, status=405)
 
     try:
@@ -325,22 +325,23 @@ def update_paper_status(request):
     except Paper.DoesNotExist:
         return JsonResponse({"error": "Paper not found"}, status=404)
 
-
-    #user = User.objects.get(id=1)
     try:
         user = User.objects.get(id=user_id)
-        conferenceRole = ConferenceRole.objects.get(user = user, conference_id = paper.conference_id)
-        if conferenceRole.role != 'admin':
-            return JsonResponse({"error": "User is not an admin"}, status=403)
+        # Verifica se l'utente ha almeno uno dei ruoli richiesti
+        allowed_roles = ['admin', 'chair']  # Puoi aggiungere altri ruoli se necessario
+        roles = ConferenceRole.objects.filter(user=user, conference_id=paper.conference_id, role__in=allowed_roles)
+        if not roles.exists():
+            return JsonResponse({"error": "User does not have the required permissions"}, status=403)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
     except ConferenceRole.DoesNotExist:
         return JsonResponse({"error": "User is not part of the conference"}, status=404)
 
     if status not in ['submitted', 'accepted', 'rejected']:
         return JsonResponse({"error": "Invalid status"}, status=400)
 
-    if (paper.status_id != status):
+    if paper.status_id != status:
         paper.status_id = status
 
     paper.save()
     return JsonResponse({"message": "Paper status updated successfully"}, status=200)
-
