@@ -123,6 +123,7 @@ esempio di richiesta post:
         404: 'Not found: Reviewer not found.',
     }
 )
+@api_view(['POST'])
 def remove_reviewer_from_paper(request):
     """
     Rimuove un reviewers da un paper di una conferenza.
