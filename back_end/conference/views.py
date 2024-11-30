@@ -381,6 +381,28 @@ Response:
 }
 '''
 @csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Get papers assigned to a specific user in a conference.",
+    manual_parameters=[
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
+    ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
+        },
+        required=['user_id', 'conference_id']
+    ),
+    responses={
+        200: openapi.Response(description="List of assigned papers"),
+        400: openapi.Response(description="Invalid request"),
+        403: openapi.Response(description="User not authorized"),
+    }
+)
+@api_view(['POST'])
 @get_user
 def get_paper_inconference_reviewer(request):
     """Return all papers assigned to a reviewer in a conference, with pagination."""
