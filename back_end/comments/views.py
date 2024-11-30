@@ -31,7 +31,7 @@ from users.models import User
     }
 )
 @api_view(['POST'])
-@csrf_exempt
+##@csrf_exempt
 def create_comment(request):
     """
     Create a new comment for a review.

@@ -1,16 +1,18 @@
-import json
 from django.utils import timezone
-
-from django.urls import reverse
 from django.test import TestCase
-from rest_framework.test import APITestCase
-from .models import User, Comment
+from django.urls import reverse
+import json
+
+from users.models import User
+from reviews.models import Review
+from .models import Comment
+from papers.models import Paper
 from conference.models import Conference
 
 
 class CommentTests(TestCase):
     def setUp(self):
-        # Creazione di utenti e conferenza per i test
+        # Create users
         self.user = User.objects.create(
             first_name="John",
             last_name="Doe",
@@ -23,102 +25,85 @@ class CommentTests(TestCase):
             email="admin@example.com",
             password="securepassword"
         )
+
+        # Create conference
         self.conference = Conference.objects.create(
             title="Test Conference",
             admin_id=self.admin_user,
             deadline=timezone.now() + timezone.timedelta(days=7),
             description="Conference description"
         )
-        self.url_add_comment = reverse('add_comment')
-        self.url_get_comments = reverse('get_comments')
 
-    def test_add_comment_successful(self):
-        """Test per aggiungere un commento con dati validi"""
-        self.client.force_login(self.user)
-        session = self.client.session
-        session['_auth_user_id'] = self.user.id
-        session.save()
-
-        payload = {
-            "conference_id": self.conference.id,
-            "content": "Questo è un commento di prova"
-        }
-        response = self.client.post(
-            self.url_add_comment,
-            data=json.dumps(payload),
-            content_type="application/json"
+        # Create paper
+        self.paper = Paper.objects.create(
+            title="Test Paper",
+            conference=self.conference,
+            author_id=self.user,
+            status_id='submitted'
         )
-        self.assertEqual(response.status_code, 201)
-        response_data = response.json()
-        self.assertIn("message", response_data)
-        self.assertEqual(response_data["message"], "Comment added successfully")
 
-        comment = Comment.objects.get(id=response_data["comment_id"])
-        self.assertEqual(comment.content, payload["content"])
-        self.assertEqual(comment.conference.id, self.conference.id)
-        self.assertEqual(comment.user.id, self.user.id)
+        # Create review
+        self.review = Review.objects.create(
+            paper=self.paper,
+            user=self.admin_user,
+            comment_text="Initial review",
+            score=8
+        )
+
+        # Set up URLs
+        self.url_create_comment = reverse('create_comment')
+        self.url_get_comments = reverse('get_all_comments')
+
 
     def test_add_comment_missing_fields(self):
-        """Test per l'aggiunta di un commento con campi mancanti"""
+        """Test adding a comment with missing fields"""
         self.client.force_login(self.user)
-        session = self.client.session
-        session['_auth_user_id'] = self.user.id
-        session.save()
 
-        payload = {"conference_id": self.conference.id}  # Nessun contenuto
+        payload = {"id_review": self.review.id}  # No text
         response = self.client.post(
-            self.url_add_comment,
+            self.url_create_comment,
             data=json.dumps(payload),
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Missing required fields")
+        self.assertEqual(response.json()["error"], "Missing fields")
 
-    def test_add_comment_invalid_conference(self):
-        """Test per l'aggiunta di un commento a una conferenza non esistente"""
+    def test_add_comment_invalid_review(self):
+        """Test adding a comment to a non-existent review"""
         self.client.force_login(self.user)
-        session = self.client.session
-        session['_auth_user_id'] = self.user.id
-        session.save()
 
         payload = {
-            "conference_id": 9999,  # ID inesistente
-            "content": "Commento non valido"
+            "id_review": 9999,  # Non-existent ID
+            "text": "Commento non valido"
         }
         response = self.client.post(
-            self.url_add_comment,
+            self.url_create_comment,
             data=json.dumps(payload),
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Conference not found")
+        self.assertEqual(response.json()["error"], "Review not found")
 
     def test_get_comments_successful(self):
-        """Test per ottenere i commenti di una conferenza"""
-        # Creazione di commenti per la conferenza
+        """Test retrieving comments for a review"""
+        # Create comments for the review
         Comment.objects.create(
             user=self.user,
-            conference=self.conference,
-            content="Primo commento"
+            review=self.review,
+            comment_text="Primo commento"
         )
         Comment.objects.create(
             user=self.admin_user,
-            conference=self.conference,
-            content="Secondo commento"
+            review=self.review,
+            comment_text="Secondo commento"
         )
 
-        response = self.client.get(self.url_get_comments + f"?conference_id={self.conference.id}")
+        response = self.client.get(self.url_get_comments)
         self.assertEqual(response.status_code, 200)
         response_data = response.json()
-        self.assertIn("comments", response_data)
-        self.assertEqual(len(response_data["comments"]), 2)
+        self.assertTrue(isinstance(response_data, list))
+        self.assertEqual(len(response_data), 2)
 
-        comments_content = [comment["content"] for comment in response_data["comments"]]
-        self.assertIn("Primo commento", comments_content)
-        self.assertIn("Secondo commento", comments_content)
-
-    def test_get_comments_invalid_conference(self):
-        """Test per ottenere commenti di una conferenza non esistente"""
-        response = self.client.get(self.url_get_comments + "?conference_id=9999")  # ID inesistente
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["error"], "Conference not found")
+        comments_text = [comment["comment_text"] for comment in response_data]
+        self.assertIn("Primo commento", comments_text)
+        self.assertIn("Secondo commento", comments_text)
