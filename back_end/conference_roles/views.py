@@ -178,3 +178,64 @@ def get_user_conferences(request):
     return JsonResponse(response_data, status=200)
 
 
+@csrf_exempt
+@swagger_auto_schema(
+    method='post',
+    operation_description="Assign the role of author to a user for a specific conference.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'id_user': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user'),
+            'id_conference': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference')
+        },
+        required=['id_user', 'id_conference']
+    ),
+    responses={
+        201: openapi.Response(description="Role assigned successfully"),
+        400: openapi.Response(description="Missing fields"),
+        404: openapi.Response(description="User or conference not found"),
+        405: openapi.Response(description="Only POST requests are allowed")
+    }
+)
+@api_view(['POST'])
+def assign_author_role(request):
+    if request.method == 'POST':
+        try:
+            # Carica i dati dalla richiesta
+            data = json.loads(request.body)
+            user_id = data.get('id_user')
+            conference_id = data.get('id_conference')
+
+            # Verifica che tutti i campi siano presenti
+            if not (user_id and conference_id):
+                return JsonResponse({'error': 'Missing fields'}, status=400)
+
+            # Verifica se l'utente esiste
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User not found'}, status=404)
+
+            # Verifica se la conferenza esiste
+            try:
+                conference = Conference.objects.get(id=conference_id)
+            except Conference.DoesNotExist:
+                return JsonResponse({'error': 'Conference not found'}, status=404)
+
+            # Crea la nuova tupla nella tabella ConferenceRole
+            conference_role = ConferenceRole.objects.get_or_create(
+                user=user,
+                conference=conference,
+                role='author'
+            )
+
+            return JsonResponse({
+                'message': 'Role assigned successfully'
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+
+

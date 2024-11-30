@@ -127,7 +127,7 @@ def get_user_reviews(request):
 GET /reviews/get_paper_reviews/?page=2&page_size=10&paper_id=1
 Content-Type: application/json
 {
-    "user_id": 1
+    "paper_id": 1
 }
 esempio di risposta json della funzione:
 {
