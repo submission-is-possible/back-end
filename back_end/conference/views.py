@@ -371,53 +371,24 @@ Response:
     "papers": [
         {
             "id": 1,
-            "title": "Machine Learning Applications in Healthcare",
-            "status": "under_review",
-            "author": {
-                "id": 789,
-                "name": "John Smith"
-            },
-            "review": {
-                "score": 8,
-                "comment": "Well-structured research with solid methodology",
-                "created_at": "2024-11-20T14:30:00Z"
-            }
+            "title": "Blockchain Applications in Supply Chain",
+            "author": "John Smith",
+            "paper_status": "accepted",
+            "review_status": "assigned"
         },
         // ... altri paper
     ]
 }
 '''
 @csrf_exempt
-@swagger_auto_schema(
-    method='post',
-    operation_description="Get papers reviewed by a specific user in a conference.",
-    manual_parameters=[
-        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
-        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER),
-    ],
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
-            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER),
-        },
-        required=['user_id', 'conference_id']
-    ),
-    responses={
-        200: openapi.Response(description="List of reviewed papers"),
-        400: openapi.Response(description="Invalid request"),
-        403: openapi.Response(description="User not authorized"),
-    }
-)
-@api_view(['POST'])
 @get_user
 def get_paper_inconference_reviewer(request):
-    """Return papers reviewed by the user in a specific conference with pagination."""
+    """Return all papers assigned to a reviewer in a conference, with pagination."""
     if request.method != 'POST':
         return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
 
     try:
-        user_id = request.user.id
+        user_id = request.data.get('user_id')
         conference_id = request.data.get('conference_id')
 
         # Verifica che l'utente sia reviewer nella conferenza
@@ -432,30 +403,25 @@ def get_paper_inconference_reviewer(request):
                 "error": "User is not a reviewer in this conference"
             }, status=403)
 
-        # Ottieni i paper recensiti
-        reviewed_papers = Review.objects.filter(
-            user_id=user_id,
-            paper__conference_id=conference_id
+        # Ottieni tutti i paper assegnati al reviewer in questa conferenza
+        assignments = PaperReviewAssignment.objects.filter(
+            reviewer_id=user_id,
+            conference_id=conference_id
         ).select_related('paper', 'paper__author_id')
 
-        # Pagination
+        # Paginazione
         page_number = request.GET.get('page', 1)
         page_size = request.GET.get('page_size', 10)
-        paginator = Paginator(reviewed_papers, page_size)
+        paginator = Paginator(assignments, page_size)
         page_obj = paginator.get_page(page_number)
 
         papers_data = [{
-            "id": review.paper.id,
-            "title": review.paper.title,
-            "status": review.paper.status_id,
-            #"author": paper.author_id.last_name + " " + paper.author_id.first_name,
-            #"paper_file": paper.paper_file.url if paper.paper_file else None,
-            "review": {
-                "score": review.score,
-                "comment": review.comment_text,
-                "created_at": review.created_at.isoformat()
-            }
-        } for review in page_obj]
+            "id": assignment.paper.id,
+            "title": assignment.paper.title,
+            "author": assignment.paper.author_id.last_name + " " + assignment.paper.author_id.first_name,
+            "paper_status": assignment.paper.status_id,  # status del paper (submitted/accepted/rejected)
+            "review_status": assignment.status,  # status della review (assigned/reviewed/approved)
+        } for assignment in page_obj]
 
         return JsonResponse({
             "current_page": page_obj.number,
