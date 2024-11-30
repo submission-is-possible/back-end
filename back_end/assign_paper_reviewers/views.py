@@ -180,16 +180,9 @@ def remove_reviewer_from_paper(request):
 
 
 @csrf_exempt
-@get_user
+#@get_user
 @swagger_auto_schema(
     method='GET',
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        properties={
-            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
-            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
-        },
-    ),
     responses={
         200: 'Lista dei revisori assegnati al paper.',
         403: 'Permission denied: Only the conference admin can view reviewers.',
