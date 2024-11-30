@@ -83,6 +83,17 @@ def assign_reviewer_to_paper(request):
     except Paper.DoesNotExist:
         return JsonResponse({"error": "Paper not found in this conference."}, status=400)
 
+    # se il reviewer è già stato assegnato al paper, non fare nulla
+    if PaperReviewAssignment.objects.filter(
+        reviewer=reviewer,
+        paper=paper,
+        conference=conference
+    ).exists():
+        return JsonResponse(
+            {
+                "message": "Reviewer already assigned to this paper."
+            },status=201)
+
     # Assegno il reviewer al paper
     PaperReviewAssignment.objects.create(
         reviewer=reviewer,
