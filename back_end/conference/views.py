@@ -2,21 +2,22 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+import csv
+import io
+from django.core.paginator import Paginator
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import status
+from rest_framework.decorators import api_view
+from users.decorators import get_user
+
 from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
 from papers.models import Paper
 from reviews.models import Review
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status
-from rest_framework.decorators import api_view
-from users.decorators import get_user
-import csv
-import io
-from django.core.paginator import Paginator
-
+from assign_paper_reviewers.models import PaperReviewAssignment
 
 # create_conference view
 @swagger_auto_schema(
@@ -429,7 +430,9 @@ def get_paper_inconference_reviewer(request):
         assignments = PaperReviewAssignment.objects.filter(
             reviewer_id=user_id,
             conference_id=conference_id
-        ).select_related('paper', 'paper__author_id')
+        ).select_related('paper', 'paper__author_id') #Ottimizza le query al database effettuando un join SQL 
+        #per pre-caricare i dati relativi: paper: Recupera l'oggetto Paper associato a ciascuna assegnazione di revisione.
+                                # paper__author_id: Recupera anche il campo author_id (l'autore del paper) dell'oggetto Paper.
 
         # Paginazione
         page_number = request.GET.get('page', 1)
