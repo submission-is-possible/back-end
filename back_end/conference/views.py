@@ -198,6 +198,7 @@ def edit_conference(request):
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
+            reviewers = data.get('reviewers')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -226,6 +227,38 @@ def edit_conference(request):
                 conference.deadline = deadline
             if description:
                 conference.description = description
+            if reviewers:
+                # Invia gli inviti ai revisori
+                for reviewer in reviewers or []:
+                    reviewer_email = reviewer.get('email')
+                    if not reviewer_email:
+                        continue
+
+                    try:
+                        reviewer_user = User.objects.get(email=reviewer_email)
+                    except User.DoesNotExist:
+                        return JsonResponse({'error': f'Reviewer user not found: {reviewer_email}'}, status=404)
+
+                    if reviewer_user == user:
+                        return JsonResponse({'error': 'Cannot invite yourself as a reviewer'}, status=400)
+
+                    # check if reviewer is already invited
+                    if Notification.objects.filter(
+                        user_sender=user,
+                        user_receiver=reviewer_user,
+                        conference=conference,
+                        type=1  # reviewer type
+                    ).exists():
+                        return JsonResponse({'error': f'Reviewer {reviewer_email} is already invited'}, status=400)
+
+                    # Crea solo la notifica, il ruolo verrà creato dopo l'accettazione
+                    Notification.objects.create(
+                        user_sender=user,
+                        user_receiver=reviewer_user,
+                        conference=conference,
+                        status=0,  # pending
+                        type=1  # reviewer type
+                    )
 
             conference.save()
             return JsonResponse({'message': 'Conference updated successfully'}, status=200)
