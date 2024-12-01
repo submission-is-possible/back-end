@@ -18,6 +18,7 @@ from reviews.models import Review
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
 from assign_paper_reviewers.models import PaperReviewAssignment
+import  assign_paper_reviewers, conference_roles, notifications, papers
 
 # create_conference view
 @swagger_auto_schema(
@@ -154,8 +155,12 @@ def delete_conference(request):
                 if not is_admin:
                     return JsonResponse({'error': 'Permission denied. User is not an admin of this conference.'}, status=403)
 
-                # Elimina tutti i ruoli associati alla conferenza in ConferenceRole
-                ConferenceRole.objects.filter(conference=conference).delete()
+                # Elimina tutte le cascades in cui la conferenza è coinvolta
+                assign_paper_reviewers.models.PaperReviewAssignment.objects.filter(conference=conference).delete()
+                conference_roles.models.ConferenceRole.objects.filter(conference=conference).delete()
+                notifications.models.Notification.objects.filter(conference=conference).delete()
+                papers.models.Paper.objects.filter(conference=conference).delete()
+
 
                 # Elimina la conferenza se l'utente è admin
                 conference.delete()
