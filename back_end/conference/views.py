@@ -61,9 +61,24 @@ def create_conference(request):
                 return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
 
             admin_user = request.user
-            
 
-            # Crea la nuova conferenza
+            reviewersAreAllValid = True
+
+            for reviewer in reviewers or []:
+                reviewer_email = reviewer.get('email')
+                if not reviewer_email:
+                    continue
+
+                try:
+                    reviewer_user = User.objects.get(email=reviewer_email)
+                except User.DoesNotExist:
+                    reviewersAreAllValid = False
+                    break
+
+            if not reviewersAreAllValid:
+                return JsonResponse({'error': 'One or more reviewers are invalid or do not exist'}, status=400)
+
+            # Create the new conference
             conference = Conference.objects.create(
                 title=title,
                 admin_id=admin_user,
@@ -72,14 +87,14 @@ def create_conference(request):
                 description=description
             )
 
-            # Crea il ruolo di amministratore per l'utente
+            # Create the admin role for the user
             ConferenceRole.objects.create(
                 user=admin_user,
                 conference=conference,
                 role='admin'
             )
 
-            # Invia gli inviti ai revisori
+            # Send invitations to reviewers
             for reviewer in reviewers or []:
                 reviewer_email = reviewer.get('email')
                 if not reviewer_email:
@@ -93,7 +108,7 @@ def create_conference(request):
                 if reviewer_user == admin_user:
                     return JsonResponse({'error': 'Cannot invite yourself as a reviewer'}, status=400)
 
-                # Crea solo la notifica, il ruolo verrà creato dopo l'accettazione
+                # Create only the notification, the role will be created after acceptance
                 Notification.objects.create(
                     user_sender=admin_user,
                     user_receiver=reviewer_user,
@@ -106,11 +121,11 @@ def create_conference(request):
                 'message': 'Conference created successfully',
                 'conference_id': conference.id
             }, status=201)
+
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
 
 @swagger_auto_schema(
     method='delete',

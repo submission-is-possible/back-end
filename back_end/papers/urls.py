@@ -7,5 +7,7 @@ urlpatterns = [
     path('conf_list/', views.list_conf_papers,  name='list_conf_papers'),
     path('paper/<str:filename>/', views.view_paper_pdf, name='view_paper_pdf'),
 
+    path('delete/', views.delete_paper, name='delete_paper'),
+
 path('update_status/', views.update_paper_status, name='update_paper_status'),
 ]

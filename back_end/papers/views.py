@@ -1,5 +1,7 @@
 import base64
 import json
+
+from reviews.models import Review
 from .models import Paper
 from users.models import User
 from conference.models import Conference
@@ -345,3 +347,75 @@ def update_paper_status(request):
 
     paper.save()
     return JsonResponse({"message": "Paper status updated successfully"}, status=200)
+
+
+@csrf_exempt
+@swagger_auto_schema(
+    method='DELETE',
+    operation_description="Delete a paper.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user')
+        },
+        required=['paper_id', 'user_id']
+    ),
+    responses={
+        200: openapi.Response(description="Paper deleted successfully"),
+        400: openapi.Response(description="Missing fields in the request or invalid JSON"),
+        403: openapi.Response(description="User does not have the required permissions"),
+        404: openapi.Response(description="Paper or user not found"),
+        405: openapi.Response(description="Only DELETE requests are allowed")
+    }
+)
+@api_view(['DELETE'])
+def delete_paper(request):
+    """
+    Delete a paper from the database.
+
+    Args:
+        request: The HTTP request object
+
+    Returns:
+        JsonResponse: The JSON response indicating success or failure
+    """
+    if request.method != 'DELETE':
+        return JsonResponse({"error": "Only DELETE requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        paper_id = data.get("paper_id")
+        user_id = data.get("user_id")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    if not paper_id or not user_id:
+        return JsonResponse({"error": "Missing fields in the request"}, status=400)
+
+    try:
+        paper = Paper.objects.get(id=paper_id)
+    except Paper.DoesNotExist:
+        return JsonResponse({"error": "Paper not found"}, status=404)
+
+    try:
+        user = User.objects.get(id=user_id)
+        # Verify the user is an admin or chair for the conference
+        allowed_roles = 'admin'
+        roles = ConferenceRole.objects.filter(user=user, conference_id=paper.conference_id, role=allowed_roles)
+        if not roles.exists():
+            return JsonResponse({"error": "User does not have the required permissions"}, status=403)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+    except ConferenceRole.DoesNotExist:
+        return JsonResponse({"error": "User is not part of the conference"}, status=404)
+
+    try:
+        review = Review.objects.get(paper=paper)
+        if review:
+            review.delete()
+    except Review.DoesNotExist:
+        pass
+
+    paper.delete()
+    return JsonResponse({"message": "Paper deleted successfully"}, status=200)
