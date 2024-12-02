@@ -482,8 +482,8 @@ def get_paper_inconference_reviewer(request):
             "id": assignment.paper.id,
             "title": assignment.paper.title,
             "author": assignment.paper.author_id.last_name + " " + assignment.paper.author_id.first_name,
-            "paper_status": assignment.paper.status_id,  # status del paper (submitted/accepted/rejected)
-            "review_status": assignment.status,  # status della review (assigned/reviewed/approved)
+            "status": assignment.paper.status_id,  # status del paper (submitted/accepted/rejected)
+            "paper_file": assignment.paper.paper_file.url if assignment.paper.paper_file else None,
         } for assignment in page_obj]
 
         return JsonResponse({
