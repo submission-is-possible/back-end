@@ -7,6 +7,8 @@ class Conference(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)  # Data di creazione (impostata automaticamente)
     deadline = models.DateTimeField()  # Deadline specifica per la conferenza
     description = models.TextField()  # Descrizione della conferenza
+    papers_deadline = models.DateTimeField()  # Deadline per la consegna dei paper
+
 
     def __str__(self):
         return self.title
