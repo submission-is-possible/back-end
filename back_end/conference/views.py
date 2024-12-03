@@ -740,6 +740,7 @@ def automatic_assign_reviewers(request):
         conference_id = data.get('conference_id')
         max_papers_per_reviewer = data.get('max_papers_per_reviewer')
         required_reviewers_per_paper = data.get('required_reviewers_per_paper')
+        penalty_weight = 5  # Peso della penalità per assegnazioni non gradite
 
         if not all([user_id, conference_id, max_papers_per_reviewer, required_reviewers_per_paper]):
             return JsonResponse({'error': 'Missing required fields.'}, status=400)
@@ -779,14 +780,17 @@ def automatic_assign_reviewers(request):
                       for pref in Preference.objects.filter(paper__conference=conference)}
         
         # Funzione obiettivo: massimizzare la soddisfazione totale dei revisori
-        # Pesi: 2 se il revisore è interessato al paper, 0 se non interessato
-        # se invece non è presente nel dizionario delle preferenze, vuol dire che il revisore è neutrale
-        # e metto come peso 1
-        prob += lpSum(2 * assignments[(p.id, r.user.id)] 
-                     if preferences.get((p.id, r.user.id)) == 'interested'
-                     else (0 if preferences.get((p.id, r.user.id)) == 'not_interested' 
-                     else assignments[(p.id, r.user.id)])
-                     for p in papers for r in reviewer_roles)
+        # Funzione obiettivo modificata: include sia bonus che penalità
+        # Per ogni assegnamento:
+        # - +2 punti se il revisore è interessato
+        # - +1 punto se il revisore è neutrale
+        # - -penalty_weight punti se il revisore non è interessato
+        prob += lpSum(
+            (2 * assignments[(p.id, r.user.id)] if preferences.get((p.id, r.user.id)) == 'interested'
+             else (-penalty_weight * assignments[(p.id, r.user.id)] if preferences.get((p.id, r.user.id)) == 'not_interested'
+             else assignments[(p.id, r.user.id)]))
+            for p in papers for r in reviewer_roles
+        )
 
         # Constraint 1: ogni paper deve avere almeno required_reviewers_per_paper revisori
         for paper in papers:
@@ -796,10 +800,12 @@ def automatic_assign_reviewers(request):
         for reviewer in reviewer_roles:
             prob += lpSum(assignments[(p.id, reviewer.user.id)] for p in papers) <= max_papers_per_reviewer
 
+        # NON LO VEDO PIù COME UN VINCOLO FORTE, potrebbe essere possibile assegnare un paper a un revisore non interessato
+        # tuttavia non sarà mai la scelta ottimale
         # Constraint 3: Non devo assegnare un paper a un revisore che non è interessato
-        for (paper_id, reviewer_id), pref in preferences.items():
-            if pref == 'not_interested':
-                prob += assignments[(paper_id, reviewer_id)] == 0
+        #for (paper_id, reviewer_id), pref in preferences.items():
+        #    if pref == 'not_interested':
+        #        prob += assignments[(paper_id, reviewer_id)] == 0
 
         # Per risolvere il problema di ottimizzazione
         prob.solve()
@@ -808,7 +814,7 @@ def automatic_assign_reviewers(request):
         if LpStatus[prob.status] != 'Optimal':
             return JsonResponse({'error': 'Could not find optimal assignment.'}, status=400)
 
-        # Create assignments in database
+        # Creo le assegnazioni nel database
         with transaction.atomic():
             # Clear existing assignments
             PaperReviewAssignment.objects.filter(conference=conference).delete()
@@ -830,8 +836,7 @@ def automatic_assign_reviewers(request):
             PaperReviewAssignment.objects.bulk_create(new_assignments)
 
         return JsonResponse({
-            'message': 'Reviewers assigned successfully.',
-            'total_satisfaction': value(prob.objective)
+            'message': 'Reviewers assigned successfully.'
         }, status=201)
 
     except json.JSONDecodeError:
