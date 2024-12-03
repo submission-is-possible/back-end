@@ -43,6 +43,7 @@ jobs:
     - name: Run Tests with pytest
       run: |
         ls -r
+        cd back_end
         poetry run pytest
 
     - name: Create Flake8 Configuration
