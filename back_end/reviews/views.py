@@ -193,7 +193,8 @@ esempio di risposta json della funzione:
                                 ),
                                 'comment_text': openapi.Schema(type=openapi.TYPE_STRING, description="Testo della recensione"),
                                 'score': openapi.Schema(type=openapi.TYPE_INTEGER, description="Punteggio assegnato al paper"),
-                                'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME, description="Data di creazione della recensione")
+                                'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME, description="Data di creazione della recensione"),
+                                'confidence_level': openapi.Schema(type=openapi.TYPE_INTEGER, description="Punteggio assegnato al paper")
                             }
                         )
                     )
@@ -240,6 +241,7 @@ def get_paper_reviews(request):
             },
             "comment_text": review.comment_text,
             "score": review.score,
+            "confidence_level": review.confidence_level,
             "created_at": review.created_at.isoformat()
         }
         for review in page_obj
@@ -274,6 +276,8 @@ def sanitize_filename(filename):
                                       description="ID dell'utente che ha scritto la recensione"),
             'comment_text': openapi.Schema(type=openapi.TYPE_STRING, description="Testo della recensione"),
             'score': openapi.Schema(type=openapi.TYPE_INTEGER, description="Punteggio assegnato al paper (1-5)",
+                                    minimum=1, maximum=5),
+            'confidence_level': openapi.Schema(type=openapi.TYPE_INTEGER, description="Punteggio assegnato al paper (1-5)",
                                     minimum=1, maximum=5)
         }
     ),
@@ -288,7 +292,8 @@ def sanitize_filename(filename):
                     'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
                     'comment_text': openapi.Schema(type=openapi.TYPE_STRING),
                     'score': openapi.Schema(type=openapi.TYPE_INTEGER),
-                    'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                    'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                    'confidence_level': openapi.Schema(type=openapi.TYPE_INTEGER)
                 }
             )
         ),
@@ -306,6 +311,7 @@ def create_review(request):
         paper_id = data.get('paper_id')
         comment_text = data.get('comment_text')
         score = data.get('score')
+        confidence_level = data.get('confidence_level')
 
         print("DEBUGGING THE CREATE NOW")
         print (request)
@@ -315,6 +321,11 @@ def create_review(request):
 
         if not isinstance(score, int) or not 1 <= score <= 5:
             return JsonResponse({"error": "Lo score deve essere un numero intero tra 1 e 5"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not isinstance(confidence_level, int) or not 1 <= confidence_level <= 5:
+            return JsonResponse({"error": "Il confidence level deve essere un numero intero tra 1 e 5"}, status=status.HTTP_400_BAD_REQUEST)
+
+
 
         try:
             paper = Paper.objects.get(id=paper_id)
@@ -336,6 +347,7 @@ def create_review(request):
             "user_id": review.user.id,
             "comment_text": review.comment_text,
             "score": review.score,
+            "confidence_level": review.confidence_level,
             "created_at": review.created_at.isoformat()
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
@@ -362,7 +374,8 @@ def create_review(request):
         properties={
             'comment_text': openapi.Schema(type=openapi.TYPE_STRING, description="Nuovo testo della recensione"),
             'score': openapi.Schema(type=openapi.TYPE_INTEGER, description="Nuovo punteggio (1-5)",
-                                    minimum=1, maximum=5)
+                                    minimum=1, maximum=5),
+            'confidence_level': openapi.Schema(type=openapi.TYPE_INTEGER, description="Nuovo punteggio (1-5)", minimum=1, maximum=5)
         }
     ),
     responses={
@@ -376,6 +389,7 @@ def create_review(request):
                     'user_id': openapi.Schema(type=openapi.TYPE_INTEGER),
                     'comment_text': openapi.Schema(type=openapi.TYPE_STRING),
                     'score': openapi.Schema(type=openapi.TYPE_INTEGER),
+                    'confidence_level': openapi.Schema(type=openapi.TYPE_INTEGER),
                     'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
                 }
             )
@@ -411,8 +425,14 @@ def update_review(request, review_id):
                 return JsonResponse({"error": "Lo score deve essere un numero intero tra 1 e 5"},
                                     status=status.HTTP_400_BAD_REQUEST)
             review.score = score
+        if 'confidence_level' in data:
+            confidence_level = data['confidence_level']
+            if not isinstance(confidence_level, int) or not 1 <= confidence_level <= 5:
+                return JsonResponse({"error": "Il confidence level deve essere un numero intero tra 1 e 5"},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            review.confidence_level = confidence_level
 
-        review.save(update_fields=['comment_text', 'score'])  # Save only specific fields
+        review.save(update_fields=['comment_text', 'score', 'confidence_level'])  # Save only specific fields
 
         # Prepare response
         return JsonResponse({
@@ -421,6 +441,7 @@ def update_review(request, review_id):
             "user_id": review.user.id,
             "comment_text": review.comment_text,
             "score": review.score,
+            "confidence_level": review.confidence_level,
             "created_at": review.created_at.isoformat()
         })
     except Review.DoesNotExist:
@@ -528,3 +549,5 @@ def get_review_score(request, review_id):
     except Exception as e:
         # Per eventuali altri errori, restituisce un errore generico
         return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
