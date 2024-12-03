@@ -176,7 +176,7 @@ class ConferenceCreationTests(TestCase):
             data=json.dumps(payload),
             content_type="application/json"
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 400)
 
 class DeleteConferenceTestCase(TestCase):
     def setUp(self):
