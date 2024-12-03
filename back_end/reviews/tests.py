@@ -113,6 +113,7 @@ class GetUserReviewsTest(TestCase):
                 user=self.user,
                 comment_text=f"Review {i}",
                 score=4,
+                confidence_level=1,
                 created_at=timezone.now()
             )
 
@@ -226,6 +227,7 @@ class GetPaperReviewsTest(TestCase):
                 user=self.user,
                 comment_text=f"Review {i}",
                 score=4,
+                confidence_level=1,
                 created_at=timezone.now()
             )
 
