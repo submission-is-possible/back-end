@@ -2,6 +2,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+from django.db import transaction
 import csv
 import io
 from django.core.paginator import Paginator
@@ -715,3 +716,66 @@ def get_paper_inconference_admin(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+
+'''
+esempio richiesta post:
+{
+    "user_id": 1,
+    "conference_id": 1,
+}
+'''
+@csrf_exempt
+def automatic_assign_reviewers(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            user_id = data.get('user_id')
+            conference_id = data.get('conference_id')
+
+            if not all([user_id, conference_id]):
+                return JsonResponse({'error': 'Missing required fields.'}, status=400)
+
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'error': 'User not found.'}, status=404)
+
+            try:
+                conference = Conference.objects.get(id=conference_id)
+            except Conference.DoesNotExist:
+                return JsonResponse({'error': 'Conference not found.'}, status=404)
+
+            is_admin = ConferenceRole.objects.filter(
+                conference=conference,
+                user=user,
+                role='admin'
+            ).exists()
+
+            if not is_admin:
+                return JsonResponse({'error': 'Permission denied. User is not an admin of this conference.'}, status=403)
+
+            papers = Paper.objects.filter(conference=conference)
+            reviewers = ConferenceRole.objects.filter(conference=conference, role='reviewer').select_related('user')
+
+            if not reviewers.exists():
+                return JsonResponse({'error': 'No reviewers found for this conference.'}, status=404)
+
+            with transaction.atomic():
+                for paper in papers:
+                    for reviewer_role in reviewers:
+                        PaperReviewAssignment.objects.create(
+                            reviewer=reviewer_role.user,
+                            paper=paper,
+                            conference=conference,
+                            status="assigned"
+                        )
+
+            return JsonResponse({'message': 'Reviewers assigned successfully.'}, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
