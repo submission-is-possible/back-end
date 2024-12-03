@@ -12,6 +12,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from users.decorators import get_user
 
+from pulp import *
+
 from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
 from papers.models import Paper
@@ -19,6 +21,7 @@ from reviews.models import Review
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
 from assign_paper_reviewers.models import PaperReviewAssignment
+from preferences.models import Preference
 import  assign_paper_reviewers, conference_roles, notifications, papers
 
 # create_conference view
@@ -719,63 +722,119 @@ def get_paper_inconference_admin(request):
     
 
 '''
-esempio richiesta post:
 {
     "user_id": 1,
     "conference_id": 1,
+    "max_papers_per_reviewer": 3,
+    "required_reviewers_per_paper": 2
 }
 '''
 @csrf_exempt
 def automatic_assign_reviewers(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            user_id = data.get('user_id')
-            conference_id = data.get('conference_id')
-
-            if not all([user_id, conference_id]):
-                return JsonResponse({'error': 'Missing required fields.'}, status=400)
-
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                return JsonResponse({'error': 'User not found.'}, status=404)
-
-            try:
-                conference = Conference.objects.get(id=conference_id)
-            except Conference.DoesNotExist:
-                return JsonResponse({'error': 'Conference not found.'}, status=404)
-
-            is_admin = ConferenceRole.objects.filter(
-                conference=conference,
-                user=user,
-                role='admin'
-            ).exists()
-
-            if not is_admin:
-                return JsonResponse({'error': 'Permission denied. User is not an admin of this conference.'}, status=403)
-
-            papers = Paper.objects.filter(conference=conference)
-            reviewers = ConferenceRole.objects.filter(conference=conference, role='reviewer').select_related('user')
-
-            if not reviewers.exists():
-                return JsonResponse({'error': 'No reviewers found for this conference.'}, status=404)
-
-            with transaction.atomic():
-                for paper in papers:
-                    for reviewer_role in reviewers:
-                        PaperReviewAssignment.objects.create(
-                            reviewer=reviewer_role.user,
-                            paper=paper,
-                            conference=conference,
-                            status="assigned"
-                        )
-
-            return JsonResponse({'message': 'Reviewers assigned successfully.'}, status=201)
-
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON'}, status=400)
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-    else:
+    if request.method != 'POST':
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        conference_id = data.get('conference_id')
+        max_papers_per_reviewer = data.get('max_papers_per_reviewer')
+        required_reviewers_per_paper = data.get('required_reviewers_per_paper')
+
+        if not all([user_id, conference_id, max_papers_per_reviewer, required_reviewers_per_paper]):
+            return JsonResponse({'error': 'Missing required fields.'}, status=400)
+
+        try:
+            user = User.objects.get(id=user_id)
+            conference = Conference.objects.get(id=conference_id)
+        except (User.DoesNotExist, Conference.DoesNotExist):
+            return JsonResponse({'error': 'User or Conference not found.'}, status=404)
+
+        if not ConferenceRole.objects.filter(conference=conference, user=user, role='admin').exists():
+            return JsonResponse({'error': 'Permission denied. User is not an admin.'}, status=403)
+
+        papers = Paper.objects.filter(conference=conference)
+        reviewer_roles = ConferenceRole.objects.filter(conference=conference, role='reviewer').select_related('user')
+
+        if not reviewer_roles.exists():
+            return JsonResponse({'error': 'No reviewers found for this conference.'}, status=404)
+
+        # creazione del problema di ottimizzazione
+        # voglio massimizzare la soddisfazione totale dei revisori, assegnando loro i paper che preferiscono
+        # ma rispettando i vincoli di assegnamento
+        prob = LpProblem("Paper_Assignment", LpMaximize)
+        # LPMaximize: massimizza la funzione obiettivo
+
+        # Creazione delle variabili di decisione
+        # creazione variabili binarie per assegnare o meno un paper a un revisore
+        assignments = LpVariable.dicts("assign",
+                                     ((p.id, r.user.id) for p in papers for r in reviewer_roles),
+                                     cat='Binary')
+        # cat='Binary' indica che le variabili sono binarie
+        # assignments[(p.id, r.user.id)] = 1 se il paper p è assegnato al revisore r, 0 altrimenti
+
+        #Creo un dizionario con le preferenze dei revisori per i paper
+        #Le chiavi sono tuple (paper_id, reviewer_id), i valori sono le preferenze ('interested', 'not_interested')
+        preferences = {(pref.paper_id, pref.reviewer_id): pref.preference 
+                      for pref in Preference.objects.filter(paper__conference=conference)}
+        
+        # Funzione obiettivo: massimizzare la soddisfazione totale dei revisori
+        # Pesi: 2 se il revisore è interessato al paper, 0 se non interessato
+        # se invece non è presente nel dizionario delle preferenze, vuol dire che il revisore è neutrale
+        # e metto come peso 1
+        prob += lpSum(2 * assignments[(p.id, r.user.id)] 
+                     if preferences.get((p.id, r.user.id)) == 'interested'
+                     else (0 if preferences.get((p.id, r.user.id)) == 'not_interested' 
+                     else assignments[(p.id, r.user.id)])
+                     for p in papers for r in reviewer_roles)
+
+        # Constraint 1: ogni paper deve avere almeno required_reviewers_per_paper revisori
+        for paper in papers:
+            prob += lpSum(assignments[(paper.id, r.user.id)] for r in reviewer_roles) >= required_reviewers_per_paper
+
+        # Constraint 2: Ogni reviewer può avere al massimo max_papers_per_reviewer da recensire
+        for reviewer in reviewer_roles:
+            prob += lpSum(assignments[(p.id, reviewer.user.id)] for p in papers) <= max_papers_per_reviewer
+
+        # Constraint 3: Non devo assegnare un paper a un revisore che non è interessato
+        for (paper_id, reviewer_id), pref in preferences.items():
+            if pref == 'not_interested':
+                prob += assignments[(paper_id, reviewer_id)] == 0
+
+        # Per risolvere il problema di ottimizzazione
+        prob.solve()
+
+        # Se non è stata trovata una soluzione ottimale restituisco un errore
+        if LpStatus[prob.status] != 'Optimal':
+            return JsonResponse({'error': 'Could not find optimal assignment.'}, status=400)
+
+        # Create assignments in database
+        with transaction.atomic():
+            # Clear existing assignments
+            PaperReviewAssignment.objects.filter(conference=conference).delete()
+            
+            # Creo nuove assegnazioni basate sulla soluzione ottimale trovata
+            new_assignments = []
+            for paper in papers:
+                for reviewer in reviewer_roles:
+                    if value(assignments[(paper.id, reviewer.user.id)]) == 1:
+                        new_assignments.append(
+                            PaperReviewAssignment(
+                                reviewer=reviewer.user,
+                                paper=paper,
+                                conference=conference,
+                                status="assigned"
+                            )
+                        )
+            
+            PaperReviewAssignment.objects.bulk_create(new_assignments)
+
+        return JsonResponse({
+            'message': 'Reviewers assigned successfully.',
+            'total_satisfaction': value(prob.objective)
+        }, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
