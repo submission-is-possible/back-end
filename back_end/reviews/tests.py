@@ -44,6 +44,7 @@ class GetUserReviewsTest(TestCase):
             user=self.user,
             comment_text="Great paper!",
             score=5,
+            confidence_level=5,
             created_at=timezone.now()
         )
         self.review2 = Review.objects.create(
@@ -51,6 +52,7 @@ class GetUserReviewsTest(TestCase):
             user=self.user,
             comment_text="Needs improvement.",
             score=3,
+            confidence_level=3,
             created_at=timezone.now()
         )
 
@@ -111,6 +113,7 @@ class GetUserReviewsTest(TestCase):
                 user=self.user,
                 comment_text=f"Review {i}",
                 score=4,
+                confidence_level=1,
                 created_at=timezone.now()
             )
 
@@ -162,6 +165,7 @@ class GetPaperReviewsTest(TestCase):
             user=self.user,
             comment_text="Great paper!",
             score=5,
+            confidence_level=3,
             created_at=timezone.now()
         )
         self.review2 = Review.objects.create(
@@ -169,6 +173,7 @@ class GetPaperReviewsTest(TestCase):
             user=self.user,
             comment_text="Needs improvement.",
             score=3,
+            confidence_level=2,
             created_at=timezone.now()
         )
 
@@ -222,6 +227,7 @@ class GetPaperReviewsTest(TestCase):
                 user=self.user,
                 comment_text=f"Review {i}",
                 score=4,
+                confidence_level=1,
                 created_at=timezone.now()
             )
 
@@ -327,7 +333,8 @@ class CreateReviewTest(TestCase):
             paper=self.paper,
             user=self.user,
             comment_text="First review",
-            score=4
+            score=4,
+            confidence_level=3
         )
 
         data = {

@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.10"
 drf-yasg = "^1.21.8"
 django-cors-headers = "^4.6.0"
+pulp = "^2.9.0"
 
 [tool.poetry.group.dev.dependencies]
 Django = "^5.1.2"

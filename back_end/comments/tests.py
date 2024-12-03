@@ -47,7 +47,8 @@ class CommentTests(TestCase):
             paper=self.paper,
             user=self.admin_user,
             comment_text="Initial review",
-            score=8
+            score=8,
+            confidence_level=4,
         )
 
         # Set up URLs
