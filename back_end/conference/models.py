@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.db import models
 from users.models import User  # Importa User se `User` è in un'app chiamata "users"
 
@@ -7,6 +9,7 @@ class Conference(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)  # Data di creazione (impostata automaticamente)
     deadline = models.DateTimeField()  # Deadline specifica per la conferenza
     description = models.TextField()  # Descrizione della conferenza
+    papers_deadline = models.DateTimeField(default=datetime.now)  # Deadline per la sottomissione dei paper
 
     def __str__(self):
         return self.title
