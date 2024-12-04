@@ -88,7 +88,7 @@ esempio di richiesta post:
 {
     "id_reviewer": 1,
     "id_paper": 101,
-    "type_paper": "interested"
+    "type_preference": "interested"
 }
 '''
 @swagger_auto_schema(
@@ -98,7 +98,7 @@ esempio di richiesta post:
         properties={
             'id_reviewer': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the reviewer'),
             'id_paper': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
-            'type_paper': openapi.Schema(type=openapi.TYPE_STRING, description='Type of preference (interested, not_interested, neutral)')
+            'type_preference': openapi.Schema(type=openapi.TYPE_STRING, description='Type of preference (interested, not_interested, neutral)')
         }
     ),
     responses={
@@ -119,9 +119,9 @@ def add_preference(request):
         data = json.loads(request.body)
         id_reviewer = data.get('id_reviewer')
         id_paper = data.get('id_paper')
-        type_paper = data.get('type_paper')
+        type_preference = data.get('type_preference')
 
-        if not all([id_reviewer, id_paper, type_paper]):
+        if not all([id_reviewer, id_paper, type_preference]):
             return JsonResponse({'error': 'Missing required fields'}, status=400)
 
         try:
@@ -145,14 +145,25 @@ def add_preference(request):
             return JsonResponse({'error': 'User is not a reviewer for this conference'}, status=403)
 
         # Verifica se esiste già una preferenza uguale
-        if Preference.objects.filter(reviewer=reviewer, paper=paper, preference=type_paper).exists():
+        if Preference.objects.filter(reviewer=reviewer, paper=paper, preference=type_preference).exists():
             return JsonResponse({'error': 'Preference already exists'}, status=409)
         
+        # Elimina la preferenza opposta se esiste
+        opposite_preferences = {
+            'interested': ['not_interested'],
+            'not_interested': ['interested']
+        }
+        Preference.objects.filter(
+            reviewer=reviewer,
+            paper=paper,
+            preference__in=opposite_preferences.get(type_preference, [])
+        ).delete()
+
         # Aggiungi la preferenza
         Preference.objects.create(
             paper=paper,
             reviewer=reviewer,
-            preference=type_paper
+            preference=type_preference
         )
 
         return JsonResponse({'message': 'Preference added successfully'}, status=201)
