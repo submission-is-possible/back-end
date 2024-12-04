@@ -14,6 +14,7 @@ from users.decorators import get_user
 from conference_roles.models import ConferenceRole
 from users.models import User
 from .models import Preference, Paper
+from conference.models import Conference
 
 @swagger_auto_schema(
     method='post',
@@ -104,7 +105,8 @@ esempio di richiesta post:
         201: openapi.Response('Preference added successfully'),
         400: 'Bad request',
         403: 'User is not a reviewer for this conference',
-        404: 'Reviewer or Paper not found'
+        404: 'Reviewer or Paper not found',
+        409: 'Preference already exists'
     }
 )
 @api_view(['POST'])
@@ -142,6 +144,10 @@ def add_preference(request):
         if not is_reviewer:
             return JsonResponse({'error': 'User is not a reviewer for this conference'}, status=403)
 
+        # Verifica se esiste già una preferenza uguale
+        if Preference.objects.filter(reviewer=reviewer, paper=paper, preference=type_paper).exists():
+            return JsonResponse({'error': 'Preference already exists'}, status=409)
+        
         # Aggiungi la preferenza
         Preference.objects.create(
             paper=paper,
@@ -150,6 +156,84 @@ def add_preference(request):
         )
 
         return JsonResponse({'message': 'Preference added successfully'}, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+    
+'''
+esempio di richiesta post:
+{
+    "id_reviewer": 1,
+    "id_conference": 42,
+    "type_preference": "interested"
+}
+'''
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'id_reviewer': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the reviewer'),
+            'id_conference': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
+            'type_preference': openapi.Schema(type=openapi.TYPE_STRING, description='Type of preference (interested, not_interested, neutral)')
+        }
+    ),
+    responses={
+        200: openapi.Response('Papers retrieved successfully'),
+        400: 'Bad request',
+        403: 'User is not a reviewer for this conference',
+        404: 'Reviewer or Conference not found'
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+def get_preference_papers_in_conference_by_reviewer(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        id_reviewer = data.get('id_reviewer')
+        id_conference = data.get('id_conference')
+        type_preference = data.get('type_preference')
+
+        if not all([id_reviewer, id_conference, type_preference]):
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+        try:
+            reviewer = User.objects.get(id=id_reviewer)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'Reviewer not found'}, status=404)
+
+        try:
+            conference = Conference.objects.get(id=id_conference)
+        except Conference.DoesNotExist:
+            return JsonResponse({'error': 'Conference not found'}, status=404)
+
+        # Verifica se l'utente è un reviewer per la conferenza
+        is_reviewer = ConferenceRole.objects.filter(
+            user=reviewer,
+            conference=conference,
+            role='reviewer'
+        ).exists()
+
+        if not is_reviewer:
+            return JsonResponse({'error': 'User is not a reviewer for this conference'}, status=403)
+
+        
+        # Prendi tutti i paper della conferenza
+        papers = Paper.objects.filter(conference=conference)
+
+        # Filtra i paper in base alle preferenze del reviewer
+        paper_ids = Preference.objects.filter(
+            reviewer=reviewer,
+            paper__in=papers,
+            preference=type_preference
+        ).values_list('paper_id', flat=True)
+
+        return JsonResponse({'paper_ids': list(paper_ids)}, status=200)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
