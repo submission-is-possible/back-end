@@ -250,3 +250,72 @@ def get_preference_papers_in_conference_by_reviewer(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
+
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'id_reviewer': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the reviewer'),
+            'id_paper': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the paper'),
+            'type_preference': openapi.Schema(type=openapi.TYPE_STRING, description='Type of preference (interested, not_interested, neutral)')
+        }
+    ),
+    responses={
+        200: openapi.Response('Preference deleted successfully'),
+        400: 'Bad request',
+        403: 'User is not a reviewer for this conference',
+        404: 'Reviewer, Paper, or Preference not found'
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+def delete_preference(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        id_reviewer = data.get('id_reviewer')
+        id_paper = data.get('id_paper')
+        type_preference = data.get('type_preference')
+
+        if not all([id_reviewer, id_paper, type_preference]):
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+
+        try:
+            reviewer = User.objects.get(id=id_reviewer)
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'Reviewer not found'}, status=404)
+
+        try:
+            paper = Paper.objects.get(id=id_paper)
+        except Paper.DoesNotExist:
+            return JsonResponse({'error': 'Paper not found'}, status=404)
+
+        # Verifica se l'utente è un reviewer per la conferenza del paper
+        is_reviewer = ConferenceRole.objects.filter(
+            user=reviewer,
+            conference=paper.conference,
+            role='reviewer'
+        ).exists()
+
+        if not is_reviewer:
+            return JsonResponse({'error': 'User is not a reviewer for this conference'}, status=403)
+
+        # Verifica se esiste la preferenza
+        try:
+            preference = Preference.objects.get(reviewer=reviewer, paper=paper, preference=type_preference)
+        except Preference.DoesNotExist:
+            return JsonResponse({'error': 'Preference not found'}, status=404)
+
+        # Elimina la preferenza
+        preference.delete()
+
+        return JsonResponse({'message': 'Preference deleted successfully'}, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
