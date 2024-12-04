@@ -41,7 +41,8 @@ class ConferenceCreationTests(TestCase):
             "title": "Test Conference",
             "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
             "description": "Description of the test conference",
-            "reviewers": [{"email": self.reviewer.email}]
+            "reviewers": [{"email": self.reviewer.email}],
+            "papers_deadline": (timezone.now() + timezone.timedelta(days=5)).isoformat(),
         }
         response = self.client.post(
             self.url,
