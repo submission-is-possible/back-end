@@ -905,6 +905,12 @@ def automatic_assign_reviewers(request):
 
             PaperReviewAssignment.objects.bulk_create(new_assignments)
 
+            # trovo la conferenza con l'id specificato e imposto il campo reviewers_assigned a True
+            conference = Conference.objects.filter(id=conference_id)
+            # Aggiorna il campo automatic_assign_status nella tabella Conference
+            conference.automatic_assign_status = True
+            conference.save()
+
         return JsonResponse({
             'message': 'Reviewers assigned successfully.'
         }, status=201)
@@ -971,3 +977,48 @@ def get_all_papers(request, conference_id):
         'pages': paginator.num_pages,
         'total': paginator.count
     }, safe=False, status=200)
+
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference')
+        },
+        required=['conference_id']
+    ),
+    responses={
+        200: openapi.Response('Status retrieved successfully', openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'automatic_assign_status': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+            }
+        )),
+        400: 'Bad request',
+        404: 'Conference not found'
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+def get_automatic_assign_status(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        conference_id = data.get('conference_id')
+
+        if not conference_id:
+            return JsonResponse({'error': 'Missing required field: conference_id'}, status=400)
+
+        try:
+            conference = Conference.objects.get(id=conference_id)
+        except Conference.DoesNotExist:
+            return JsonResponse({'error': 'Conference not found'}, status=404)
+
+        return JsonResponse({'automatic_assign_status': conference.automatic_assign_status}, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
