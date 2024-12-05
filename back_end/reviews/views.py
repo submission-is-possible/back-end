@@ -551,3 +551,59 @@ def get_review_score(request, review_id):
         return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+## method that given a review and a user, returns if the user has already reviewed the paper
+
+@swagger_auto_schema(
+    method='post',
+    operation_description="Verifica se un utente ha già recensito un paper.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'paper_id': openapi.Schema(type=openapi.TYPE_INTEGER, description="ID del paper"),
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description="ID dell'utente")
+        },
+        required=['paper_id', 'user_id']
+    ),
+    responses={
+        200: openapi.Response(
+            description="Indica se l'utente ha già recensito il paper",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'has_been_reviewed': openapi.Schema(type=openapi.TYPE_BOOLEAN, description="True se l'utente ha già recensito il paper, False altrimenti")
+                }
+            )
+        ),
+        400: "Richiesta non valida",
+        200: openapi.Response(
+            description="Indica se l'utente ha già recensito il paper",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'has_been_reviewed': openapi.Schema(type=openapi.TYPE_BOOLEAN, description="True se l'utente ha già recensito il paper, False altrimenti")
+                }
+            )
+        )
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+def has_been_reviewed(request):
+    try:
+        data = request.data
+        paper_id = data.get('paper_id')
+        user_id = data.get('user_id')
+
+        if not all([paper_id, user_id]):
+            return JsonResponse({"error": "Tutti i campi sono obbligatori"}, status=status.HTTP_400_BAD_REQUEST)
+
+        paper = Paper.objects.get(id=paper_id)
+        user = User.objects.get(id=user_id)
+
+        if Review.objects.filter(paper=paper, user=user).exists():
+            return JsonResponse({"has_been_reviewed": True}, status=status.HTTP_200_OK)
+        else:
+            return JsonResponse({"has_been_reviewed": False}, status=status.HTTP_200_OK)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

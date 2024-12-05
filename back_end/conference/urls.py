@@ -11,4 +11,6 @@ urlpatterns = [
     path('get_paper_inconference_reviewer/', views.get_paper_inconference_reviewer, name='get_paper_inconference_reviewer'),
     path('get_paper_inconference_author/', views.get_paper_inconference_author, name='get_paper_inconference_author'),
     path('get_paper_inconference_admin/', views.get_paper_inconference_admin, name='get_paper_inconference_admin'),
+
+    path('get_all_papers/<int:conference_id>/', views.get_all_papers, name='get_all_papers'),
 ]
