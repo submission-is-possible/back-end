@@ -24,12 +24,16 @@ from assign_paper_reviewers.models import PaperReviewAssignment
 from preferences.models import Preference
 import  assign_paper_reviewers, conference_roles, notifications, papers
 
+
+
+
 # create_conference view
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        properties={
+        properties=
+        {
             'title': openapi.Schema(type=openapi.TYPE_STRING, description='Title of the conference'),
             'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for submissions'),
             'description': openapi.Schema(type=openapi.TYPE_STRING, description='Description of the conference'),
@@ -37,7 +41,8 @@ import  assign_paper_reviewers, conference_roles, notifications, papers
                                         items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                                             'email': openapi.Schema(type=openapi.TYPE_STRING,
                                                                     description='Email of reviewer')
-                                        }))
+                                        })),
+            'papers_deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for paper submissions')
         }
     ),
     responses={
@@ -57,8 +62,9 @@ def create_conference(request):
             deadline = data.get('deadline')
             description = data.get('description')
             reviewers = data.get('reviewers')
+            papers_deadline = data.get('papers_deadline')
 
-            if not (title and deadline and description):
+            if not (title and deadline and description and papers_deadline):
                 return JsonResponse({'error': 'Missing required fields'}, status=400)
 
             if reviewers is None:
@@ -88,7 +94,8 @@ def create_conference(request):
                 admin_id=admin_user,
                 created_at=timezone.now(),
                 deadline=deadline,
-                description=description
+                description=description,
+                papers_deadline=papers_deadline
             )
 
             # Create the admin role for the user
@@ -131,6 +138,9 @@ def create_conference(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
+
+
+## delete conference view
 @swagger_auto_schema(
     method='delete',
     request_body=openapi.Schema(
@@ -157,7 +167,7 @@ def delete_conference(request):
             conference_id = data.get('conference_id')
             user = request.user  #`user_id` deve essere fornito per verificare i permessi dell'utente,
             # se l'utente è admin della conferenza, può eliminarla
-            
+
             # Verifica che l'ID della conferenza e l'ID utente siano forniti
             if not conference_id:
                 return JsonResponse({'error': 'Missing conference_id'}, status=400)
@@ -191,6 +201,9 @@ def delete_conference(request):
     else:
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
 
+
+
+## edit conference view
 @swagger_auto_schema(
     method='patch',
     request_body=openapi.Schema(
@@ -199,7 +212,12 @@ def delete_conference(request):
             'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference to edit'),
             'title': openapi.Schema(type=openapi.TYPE_STRING, description='New title of the conference'),
             'deadline': openapi.Schema(type=openapi.TYPE_STRING, description='New deadline for submissions'),
-            'description': openapi.Schema(type=openapi.TYPE_STRING, description='New description of the conference')
+            'description': openapi.Schema(type=openapi.TYPE_STRING, description='New description of the conference'),
+            'papers_deadline': openapi.Schema(type=openapi.TYPE_STRING, description='New deadline for paper submissions'),
+            'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY,
+                                        items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+                                            'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
+                                        }))
         }
     ),
     responses={
@@ -223,6 +241,7 @@ def edit_conference(request):
             deadline = data.get('deadline')
             description = data.get('description')
             reviewers = data.get('reviewers')
+            papers_deadline = data.get('papers_deadline')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -244,13 +263,15 @@ def edit_conference(request):
             if not is_admin:
                 return JsonResponse({'error': 'Permission denied. User is not an admin of this conference.'}, status=403)
 
-            # Aggiorna i campi solo se sono presenti nella richiesta
+            # Aggiorna i campi solo se sono presenti nella richiesta (solo la conference è obbligatoria e lancia un errore se manca)
             if title:
                 conference.title = title
             if deadline:
                 conference.deadline = deadline
             if description:
                 conference.description = description
+            if papers_deadline:
+                conference.papers_deadline = papers_deadline
             if reviewers:
                 # Invia gli inviti ai revisori
                 for reviewer in reviewers or []:
@@ -293,6 +314,8 @@ def edit_conference(request):
     else:
         return JsonResponse({'error': 'Only PATCH requests are allowed'}, status=405)
 
+
+## view to use a CSV file to add the reviewers
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
@@ -320,18 +343,18 @@ def upload_reviewers_csv(request):
 
     if 'csv_file' not in request.FILES:
         return JsonResponse({'error': 'No CSV file provided'}, status=400)
-    
+
     csv_file = request.FILES['csv_file']
 
     # Check if file is CSV
     if not csv_file.name.endswith('.csv'):
         return JsonResponse({'error': 'File must be a CSV'}, status=400)
-    
+
     try:
         # Try different encodings
         encodings = ['utf-8', 'utf-8-sig', 'iso-8859-1', 'cp1252']
         content = None
-        
+
         for encoding in encodings:
             try:
                 # Reset file pointer
@@ -340,19 +363,19 @@ def upload_reviewers_csv(request):
                 break
             except UnicodeDecodeError:
                 continue
-        
+
         if content is None:
             return JsonResponse({'error': 'Unable to decode CSV file'}, status=400)
-        
+
         # Try different dialect detection
         sample = content[:1024]
         try:
             dialect = csv.Sniffer().sniff(sample)
         except csv.Error:
             dialect = csv.excel
-        
+
         csv_reader = csv.reader(io.StringIO(content), dialect)
-        
+
         # Extract emails from CSV
         emails = []
         for row in csv_reader:
@@ -360,16 +383,18 @@ def upload_reviewers_csv(request):
                 email = row[0].strip()  # Assuming email is in the first column
                 if '@' in email:  # Basic email validation
                     emails.append(email)
-        
+
         if not emails:
             return JsonResponse({'error': 'No valid email addresses found in CSV'}, status=400)
-            
+
         return JsonResponse({'emails': emails})
-    
+
     except Exception as e:
         return JsonResponse({'error': f'Error processing CSV: {str(e)}'}, status=400)
 
 
+
+## view to get all the conferences (with pagination)
 @swagger_auto_schema(
     method='get',
     operation_description='Get all conferences using pagination',
@@ -385,7 +410,7 @@ def get_conferences(request):
     if request.method == 'GET':
         page_number = request.GET.get('page', 1)
         page_size = request.GET.get('page_size', 20)
-    
+
         conferences = Conference.objects.all().order_by('created_at')
         conferences_list = []
         for conference in conferences:
@@ -395,7 +420,8 @@ def get_conferences(request):
                 'deadline': conference.deadline,
                 'description': conference.description,
                 'admin_id': conference.admin_id.email,
-                'created_at': conference.created_at
+                'created_at': conference.created_at,
+                'papers_deadline': conference.papers_deadline
             })
 
         paginator = Paginator(conferences_list, page_size)
@@ -411,8 +437,13 @@ def get_conferences(request):
         return JsonResponse(response_data, safe=False, status=200)
     else:
         return JsonResponse({'error': 'Only GET requests are allowed'}, status=405)
-    
+
+
+
+## method to get all the papers a reviewer reviewed in a specific conference
 '''
+ESEMPIO DI RICHIESTA:
+
 Tutti i paper che un reviewer ha recensito in una conferenza Endpoint
 URL: POST /api/conference/papers/reviewer/?page=1&page_size=10
 Request Body:
@@ -487,7 +518,7 @@ def get_paper_inconference_reviewer(request):
         assignments = PaperReviewAssignment.objects.filter(
             reviewer_id=user_id,
             conference_id=conference_id
-        ).select_related('paper', 'paper__author_id') #Ottimizza le query al database effettuando un join SQL 
+        ).select_related('paper', 'paper__author_id') #Ottimizza le query al database effettuando un join SQL
         #per pre-caricare i dati relativi: paper: Recupera l'oggetto Paper associato a ciascuna assegnazione di revisione.
                                 # paper__author_id: Recupera anche il campo author_id (l'autore del paper) dell'oggetto Paper.
 
@@ -515,7 +546,12 @@ def get_paper_inconference_reviewer(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
+
+
+## method to get all the papers an author submitted in a specific conference
 '''
+ESEMPIO DI RICHIESTA:
+
 paper che un Author ha submittato nella conferenza Endpoint
 URL: POST /api/conference/papers/author/?page=1&page_size=10
 Request Body:
@@ -618,6 +654,9 @@ def get_paper_inconference_author(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
+
+
+## method FOR ADMINS ONLY that returns all the papers in a specific conference
 '''
 Admin Endpoint --> ritorna tutti i paper di quella conferenza
 URL: POST /api/conference/papers/admin/?page=1&page_size=10
@@ -719,8 +758,10 @@ def get_paper_inconference_admin(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    
 
+
+
+## method to automatically assign reviewers to papers
 '''
 {
     "user_id": 1,
@@ -729,11 +770,30 @@ def get_paper_inconference_admin(request):
     "required_reviewers_per_paper": 2
 }
 '''
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'user_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the user'),
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
+            'max_papers_per_reviewer': openapi.Schema(type=openapi.TYPE_INTEGER, description='Max papers per reviewer'),
+            'required_reviewers_per_paper': openapi.Schema(type=openapi.TYPE_INTEGER, description='Required reviewers per paper'),
+        },
+        required=['user_id', 'conference_id', 'max_papers_per_reviewer', 'required_reviewers_per_paper']
+    ),
+    responses={
+        200: 'Reviewers assigned successfully',
+        400: 'Bad request',
+        405: 'Method not allowed'
+    }
+)
+@api_view(['POST'])
 @csrf_exempt
 def automatic_assign_reviewers(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-    
+
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
@@ -776,9 +836,9 @@ def automatic_assign_reviewers(request):
 
         #Creo un dizionario con le preferenze dei revisori per i paper
         #Le chiavi sono tuple (paper_id, reviewer_id), i valori sono le preferenze ('interested', 'not_interested')
-        preferences = {(pref.paper_id, pref.reviewer_id): pref.preference 
+        preferences = {(pref.paper_id, pref.reviewer_id): pref.preference
                       for pref in Preference.objects.filter(paper__conference=conference)}
-        
+
         # Funzione obiettivo: massimizzare la soddisfazione totale dei revisori
         # Funzione obiettivo modificata: include sia bonus che penalità
         # Per ogni assegnamento:
@@ -818,7 +878,7 @@ def automatic_assign_reviewers(request):
         with transaction.atomic():
             # Clear existing assignments
             PaperReviewAssignment.objects.filter(conference=conference).delete()
-            
+
             # Creo nuove assegnazioni basate sulla soluzione ottimale trovata
             new_assignments = []
             for paper in papers:
@@ -832,7 +892,7 @@ def automatic_assign_reviewers(request):
                                 status="assigned"
                             )
                         )
-            
+
             PaperReviewAssignment.objects.bulk_create(new_assignments)
 
         return JsonResponse({
