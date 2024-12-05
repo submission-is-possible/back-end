@@ -780,6 +780,7 @@ def get_paper_inconference_admin(request):
     "required_reviewers_per_paper": 2
 }
 '''
+@csrf_exempt
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
@@ -798,7 +799,6 @@ def get_paper_inconference_admin(request):
         405: 'Method not allowed'
     }
 )
-@csrf_exempt
 @api_view(['POST'])
 def automatic_assign_reviewers(request):
     if request.method != 'POST':
