@@ -506,7 +506,6 @@ def delete_review(request, review_id):
 
 ## function that given a review ID, returns the score
 
-
 @swagger_auto_schema(
     method='get',
     operation_description="Restituisce il punteggio di una recensione dato il suo ID.",
