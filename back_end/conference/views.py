@@ -788,8 +788,8 @@ def get_paper_inconference_admin(request):
         405: 'Method not allowed'
     }
 )
-@api_view(['POST'])
 @csrf_exempt
+@api_view(['POST'])
 def automatic_assign_reviewers(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
