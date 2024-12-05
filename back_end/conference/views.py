@@ -272,10 +272,10 @@ def edit_conference(request):
                 conference.title = title
             if deadline:
                 conference.deadline = deadline
-            if description:
-                conference.description = description
             if papers_deadline:
                 conference.papers_deadline = papers_deadline
+            if description:
+                conference.description = description
             if reviewers:
                 # Invia gli inviti ai revisori
                 for reviewer in reviewers or []:
@@ -308,8 +308,9 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+
             ## the submission deadline must still be before the conference deadline
-            if deadline < papers_deadline:
+            if conference.deadline < conference.papers_deadline:
                 return JsonResponse({'error': 'Submission deadline must be before conference deadline'}, status=400)
 
             conference.save()
