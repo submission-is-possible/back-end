@@ -12,6 +12,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from users.decorators import get_user
 
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
 from pulp import *
 
 from notifications.models import Notification
@@ -914,13 +916,16 @@ def automatic_assign_reviewers(request):
 
 
 
+## method to get all the papers in a specific conference w pagination
 
-## method to get all the papers in a specific conference
 @swagger_auto_schema(
     method='get',
     operation_description="Get all papers in a conference.",
     manual_parameters=[
         openapi.Parameter('conference_id', openapi.IN_PATH, type=openapi.TYPE_INTEGER),
+        openapi.Parameter('page', openapi.IN_QUERY, type=openapi.TYPE_INTEGER, description='Page number'),
+        openapi.Parameter('page_size', openapi.IN_QUERY, type=openapi.TYPE_INTEGER,
+                          description='Number of items per page'),
     ],
     responses={
         200: 'List of all conference papers',
@@ -937,8 +942,21 @@ def get_all_papers(request, conference_id):
         return JsonResponse({'error': 'Conference not found'}, status=404)
 
     papers = Paper.objects.filter(conference=conference)
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    page_size = request.GET.get('page_size', 10)
+    paginator = Paginator(papers, page_size)
+
+    try:
+        paginated_papers = paginator.page(page)
+    except PageNotAnInteger:
+        paginated_papers = paginator.page(1)
+    except EmptyPage:
+        paginated_papers = paginator.page(paginator.num_pages)
+
     papers_list = []
-    for paper in papers:
+    for paper in paginated_papers:
         papers_list.append({
             'id': paper.id,
             'title': paper.title,
@@ -948,4 +966,9 @@ def get_all_papers(request, conference_id):
             'paper_file': paper.paper_file.url if paper.paper_file else None
         })
 
-    return JsonResponse(papers_list, safe=False, status=200)
+    return JsonResponse({
+        'papers': papers_list,
+        'page': paginated_papers.number,
+        'pages': paginator.num_pages,
+        'total': paginator.count
+    }, safe=False, status=200)
