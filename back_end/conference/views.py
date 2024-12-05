@@ -70,6 +70,10 @@ def create_conference(request):
             if reviewers is None:
                 return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
 
+            ## la submission deadline deve essere prima della deadline della conferenza
+            if deadline < papers_deadline:
+                return JsonResponse({'error': 'Submission deadline must be before conference deadline'}, status=400)
+
             admin_user = request.user
 
             reviewersAreAllValid = True
@@ -304,6 +308,9 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+            ## the submission deadline must still be before the conference deadline
+            if deadline < papers_deadline:
+                return JsonResponse({'error': 'Submission deadline must be before conference deadline'}, status=400)
 
             conference.save()
             return JsonResponse({'message': 'Conference updated successfully'}, status=200)
