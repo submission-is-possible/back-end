@@ -157,7 +157,8 @@ def get_user_conferences(request):
                 "created_at": role.conference.created_at.isoformat(),
                 "deadline": role.conference.deadline.isoformat(),
                 "roles": [],
-                "user_id": role.conference.admin_id.id
+                "user_id": role.conference.admin_id.id,
+                'papers_deadline': role.conference.papers_deadline
             }
         conferences_dict[conf_id]["roles"].append(role.role)
 
