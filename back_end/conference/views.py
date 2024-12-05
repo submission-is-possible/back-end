@@ -911,3 +911,41 @@ def automatic_assign_reviewers(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+
+
+## method to get all the papers in a specific conference
+@swagger_auto_schema(
+    method='get',
+    operation_description="Get all papers in a conference.",
+    manual_parameters=[
+        openapi.Parameter('conference_id', openapi.IN_PATH, type=openapi.TYPE_INTEGER),
+    ],
+    responses={
+        200: 'List of all conference papers',
+        404: 'Conference not found',
+        405: 'Method not allowed'
+    }
+)
+@csrf_exempt
+@api_view(['GET'])
+def get_all_papers(request, conference_id):
+    try:
+        conference = Conference.objects.get(id=conference_id)
+    except Conference.DoesNotExist:
+        return JsonResponse({'error': 'Conference not found'}, status=404)
+
+    papers = Paper.objects.filter(conference=conference)
+    papers_list = []
+    for paper in papers:
+        papers_list.append({
+            'id': paper.id,
+            'title': paper.title,
+            'author': paper.author_id.email,
+            'status': paper.status_id,
+            'created_at': paper.created_at,
+            'paper_file': paper.paper_file.url if paper.paper_file else None
+        })
+
+    return JsonResponse(papers_list, safe=False, status=200)
