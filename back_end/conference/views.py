@@ -962,7 +962,6 @@ def get_all_papers(request, conference_id):
             'title': paper.title,
             'author': paper.author_id.email,
             'status': paper.status_id,
-            'created_at': paper.created_at,
             'paper_file': paper.paper_file.url if paper.paper_file else None
         })
 
