@@ -177,8 +177,7 @@ def add_preference(request):
 esempio di richiesta post:
 {
     "id_reviewer": 1,
-    "id_conference": 42,
-    "type_preference": "interested"
+    "id_conference": 42
 }
 '''
 @swagger_auto_schema(
@@ -188,11 +187,16 @@ esempio di richiesta post:
         properties={
             'id_reviewer': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the reviewer'),
             'id_conference': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference'),
-            'type_preference': openapi.Schema(type=openapi.TYPE_STRING, description='Type of preference (interested, not_interested, neutral)')
         }
     ),
     responses={
-        200: openapi.Response('Papers retrieved successfully'),
+        200: openapi.Response('Papers retrieved successfully', openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'paper_ids_interested': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER)),
+                'paper_ids_not_interested': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_INTEGER))
+            }
+        )),
         400: 'Bad request',
         403: 'User is not a reviewer for this conference',
         404: 'Reviewer or Conference not found'
@@ -208,9 +212,8 @@ def get_preference_papers_in_conference_by_reviewer(request):
         data = json.loads(request.body)
         id_reviewer = data.get('id_reviewer')
         id_conference = data.get('id_conference')
-        type_preference = data.get('type_preference')
 
-        if not all([id_reviewer, id_conference, type_preference]):
+        if not all([id_reviewer, id_conference]):
             return JsonResponse({'error': 'Missing required fields'}, status=400)
 
         try:
@@ -238,14 +241,23 @@ def get_preference_papers_in_conference_by_reviewer(request):
         papers = Paper.objects.filter(conference=conference)
 
         # Filtra i paper in base alle preferenze del reviewer
-        paper_ids = Preference.objects.filter(
+        paper_ids_interested = Preference.objects.filter(
             reviewer=reviewer,
             paper__in=papers,
-            preference=type_preference
+            preference='interested'
         ).values_list('paper_id', flat=True)
 
-        return JsonResponse({'paper_ids': list(paper_ids)}, status=200)
+        paper_ids_not_interested = Preference.objects.filter(
+            reviewer=reviewer,
+            paper__in=papers,
+            preference='not_interested'
+        ).values_list('paper_id', flat=True)
 
+        return JsonResponse({
+            'paper_ids_interested': list(paper_ids_interested),
+            'paper_ids_not_interested': list(paper_ids_not_interested)
+        }, status=200)
+    
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
