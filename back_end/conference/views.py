@@ -923,7 +923,7 @@ def automatic_assign_reviewers(request):
 
 
 ## method to get all the papers in a specific conference w pagination
-
+@csrf_exempt
 @swagger_auto_schema(
     method='get',
     operation_description="Get all papers in a conference.",
@@ -939,7 +939,6 @@ def automatic_assign_reviewers(request):
         405: 'Method not allowed'
     }
 )
-@csrf_exempt
 @api_view(['GET'])
 def get_all_papers(request, conference_id):
     try:
