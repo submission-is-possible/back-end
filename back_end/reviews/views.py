@@ -555,7 +555,7 @@ def get_review_score(request, review_id):
 ## method that given a review and a user, returns if the user has already reviewed the paper
 
 @swagger_auto_schema(
-    method='get',
+    method='post',
     operation_description="Verifica se un utente ha già recensito un paper.",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
@@ -587,7 +587,7 @@ def get_review_score(request, review_id):
         )
     }
 )
-@api_view(['GET'])
+@api_view(['POST'])
 @csrf_exempt
 def has_been_reviewed(request):
     try:
