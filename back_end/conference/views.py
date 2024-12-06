@@ -999,7 +999,8 @@ def get_all_papers(request, conference_id):
         200: openapi.Response('Status retrieved successfully', openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                'automatic_assign_status': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                'automatic_assign_status': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                'status': openapi.Schema(type=openapi.TYPE_INTEGER)
             }
         )),
         400: 'Bad request',
@@ -1024,7 +1025,19 @@ def get_automatic_assign_status(request):
         except Conference.DoesNotExist:
             return JsonResponse({'error': 'Conference not found'}, status=404)
 
-        return JsonResponse({'automatic_assign_status': conference.automatic_assign_status}, status=200)
+        # Controlla la presenza di almeno un paper e almeno un revisore
+        has_papers = Paper.objects.filter(conference=conference).exists()
+        has_reviewers = ConferenceRole.objects.filter(conference=conference, role='reviewer').exists()
+
+        if conference.automatic_assign_status:
+            status = 1
+        else:
+            status = 1 if has_papers and has_reviewers else 0
+
+        return JsonResponse({
+            'automatic_assign_status': conference.automatic_assign_status,
+            'status': status
+        }, status=200)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
