@@ -44,7 +44,8 @@ import  assign_paper_reviewers, conference_roles, notifications, papers
                                             'email': openapi.Schema(type=openapi.TYPE_STRING,
                                                                     description='Email of reviewer')
                                         })),
-            'papers_deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for paper submissions')
+            'papers_deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for paper submissions'),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='Blinding status (none/single_blind/double_blind)')
         }
     ),
     responses={
@@ -65,6 +66,7 @@ def create_conference(request):
             description = data.get('description')
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
+            status = data.get('status')
 
             if not (title and deadline and description and papers_deadline):
                 return JsonResponse({'error': 'Missing required fields'}, status=400)
@@ -75,6 +77,9 @@ def create_conference(request):
             ## la submission deadline deve essere prima della deadline della conferenza
             if deadline < papers_deadline:
                 return JsonResponse({'error': 'Submission deadline must be before conference deadline'}, status=400)
+
+            if status not in ['none', 'single_blind', 'double_blind']:
+                return JsonResponse({'error': 'Invalid status'}, status=400)
 
             admin_user = request.user
 
@@ -101,7 +106,8 @@ def create_conference(request):
                 created_at=timezone.now(),
                 deadline=deadline,
                 description=description,
-                papers_deadline=papers_deadline
+                papers_deadline=papers_deadline,
+                status=status
             )
 
             # Create the admin role for the user
@@ -223,7 +229,8 @@ def delete_conference(request):
             'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY,
                                         items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                                             'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
-                                        }))
+                                        })),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New blinding status (none/single_blind/double_blind)')     
         }
     ),
     responses={
@@ -248,6 +255,7 @@ def edit_conference(request):
             description = data.get('description')
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
+            status = data.get('status')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -310,6 +318,9 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+            
+            if status:
+                conference.status = status
 
             ## the submission deadline must still be before the conference deadline
             if conference.deadline < conference.papers_deadline:
