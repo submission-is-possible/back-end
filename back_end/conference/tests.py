@@ -4,8 +4,12 @@ from django.utils import timezone
 from django.test import TestCase, Client
 from rest_framework.test import APITestCase
 
-from .models import User, Conference
+from .models import Conference
+from users.models import User
 from conference_roles.models import ConferenceRole
+from papers.models import Paper
+from assign_paper_reviewers.models import PaperReviewAssignment
+from preferences.models import Preference
 from notifications.models import Notification
 
 class ConferenceCreationTests(TestCase):
@@ -490,3 +494,59 @@ class GetConferencesTestCase(TestCase):
         self.assertEqual(response_data['total_pages'], 3)
         self.assertEqual(response_data['total_conferences'], 25)
         self.assertEqual(len(response_data['conferences']), 10)
+
+    
+class AutomaticAssignReviewersTest(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create(first_name='Admin', last_name='User', email='admin@example.com', password='adminpass')
+        self.reviewer1 = User.objects.create(first_name='Reviewer', last_name='One', email='reviewer1@example.com', password='reviewerpass1')
+        self.reviewer2 = User.objects.create(first_name='Reviewer', last_name='Two', email='reviewer2@example.com', password='reviewerpass2')
+        self.reviewer3 = User.objects.create(first_name='Reviewer', last_name='Three', email='reviewer3@example.com', password='reviewerpass3')
+
+        self.conference = Conference.objects.create(
+            title='Test Conference',
+            admin_id=self.admin,
+            deadline=timezone.now() + timezone.timedelta(days=30),
+            description='This is a test conference',
+            papers_deadline=timezone.now() + timezone.timedelta(days=15),
+            automatic_assign_status=False
+        )
+
+        ConferenceRole.objects.create(user=self.admin, conference=self.conference, role='admin')
+        ConferenceRole.objects.create(user=self.reviewer1, conference=self.conference, role='reviewer')
+        ConferenceRole.objects.create(user=self.reviewer2, conference=self.conference, role='reviewer')
+        ConferenceRole.objects.create(user=self.reviewer3, conference=self.conference, role='reviewer')
+
+        self.paper1 = Paper.objects.create(title='Paper 1', conference=self.conference, author_id=self.admin, status_id='submitted')
+        self.paper2 = Paper.objects.create(title='Paper 2', conference=self.conference, author_id=self.admin, status_id='submitted')
+        self.paper3 = Paper.objects.create(title='Paper 3', conference=self.conference, author_id=self.admin, status_id='submitted')
+
+        Preference.objects.create(paper=self.paper1, reviewer=self.reviewer1, preference='interested')
+        Preference.objects.create(paper=self.paper1, reviewer=self.reviewer2, preference='interested')
+        Preference.objects.create(paper=self.paper2, reviewer=self.reviewer2, preference='interested')
+        Preference.objects.create(paper=self.paper2, reviewer=self.reviewer3, preference='interested')
+        Preference.objects.create(paper=self.paper3, reviewer=self.reviewer1, preference='interested')
+        Preference.objects.create(paper=self.paper3, reviewer=self.reviewer3, preference='interested')
+
+    def test_automatic_assign_reviewers(self):
+        client = Client()
+        response = client.post('/conference/automatic_assign_reviewers/', json.dumps({
+            'user_id': self.admin.id,
+            'conference_id': self.conference.id,
+            'max_papers_per_reviewer': 2,
+            'required_reviewers_per_paper': 2
+        }), content_type='application/json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('message', response.json())
+        self.assertEqual(response.json()['message'], 'Reviewers assigned successfully.')
+
+        self.conference.refresh_from_db()
+        self.assertTrue(self.conference.automatic_assign_status)
+
+        assignments = PaperReviewAssignment.objects.filter(conference=self.conference)
+        self.assertTrue(assignments.exists())
+        self.assertEqual(assignments.count(), 6)
+
+        for paper in [self.paper1, self.paper2, self.paper3]:
+            self.assertEqual(assignments.filter(paper=paper).count(), 2)

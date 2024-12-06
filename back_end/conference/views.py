@@ -794,7 +794,7 @@ def get_paper_inconference_admin(request):
         required=['user_id', 'conference_id', 'max_papers_per_reviewer', 'required_reviewers_per_paper']
     ),
     responses={
-        200: 'Reviewers assigned successfully',
+        201: openapi.Response('Automatic assignment successful'),
         400: 'Bad request',
         405: 'Method not allowed'
     }
@@ -803,7 +803,6 @@ def get_paper_inconference_admin(request):
 def automatic_assign_reviewers(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
@@ -811,25 +810,34 @@ def automatic_assign_reviewers(request):
         max_papers_per_reviewer = data.get('max_papers_per_reviewer')
         required_reviewers_per_paper = data.get('required_reviewers_per_paper')
         penalty_weight = 5  # Peso della penalità per assegnazioni non gradite
-
+        
         if not all([user_id, conference_id, max_papers_per_reviewer, required_reviewers_per_paper]):
             return JsonResponse({'error': 'Missing required fields.'}, status=400)
-
+    
         try:
             user = User.objects.get(id=user_id)
             conference = Conference.objects.get(id=conference_id)
         except (User.DoesNotExist, Conference.DoesNotExist):
             return JsonResponse({'error': 'User or Conference not found.'}, status=404)
-
+        
         if not ConferenceRole.objects.filter(conference=conference, user=user, role='admin').exists():
             return JsonResponse({'error': 'Permission denied. User is not an admin.'}, status=403)
-
+    
         papers = Paper.objects.filter(conference=conference)
         reviewer_roles = ConferenceRole.objects.filter(conference=conference, role='reviewer').select_related('user')
-
+    
         if not reviewer_roles.exists():
             return JsonResponse({'error': 'No reviewers found for this conference.'}, status=404)
-
+        
+        if not papers.exists():
+            return JsonResponse({'error': 'No papers found for this conference.'}, status=404)
+        
+        if max_papers_per_reviewer < required_reviewers_per_paper:
+            return JsonResponse({'error': 'Max papers per reviewer must be greater than or equal to required reviewers per paper.'}, status=400)
+        
+        if max_papers_per_reviewer < 1 or required_reviewers_per_paper < 1:
+            return JsonResponse({'error': 'Max papers per reviewer and required reviewers per paper must be greater than 0.'}, status=400)
+        
         # creazione del problema di ottimizzazione
         # voglio massimizzare la soddisfazione totale dei revisori, assegnando loro i paper che preferiscono
         # ma rispettando i vincoli di assegnamento
@@ -906,7 +914,7 @@ def automatic_assign_reviewers(request):
             PaperReviewAssignment.objects.bulk_create(new_assignments)
 
             # trovo la conferenza con l'id specificato e imposto il campo reviewers_assigned a True
-            conference = Conference.objects.filter(id=conference_id)
+            conference = Conference.objects.get(id=conference_id)
             # Aggiorna il campo automatic_assign_status nella tabella Conference
             conference.automatic_assign_status = True
             conference.save()
@@ -919,6 +927,7 @@ def automatic_assign_reviewers(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+        
 
 
 
