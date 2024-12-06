@@ -780,6 +780,7 @@ def get_paper_inconference_admin(request):
     "required_reviewers_per_paper": 2
 }
 '''
+@csrf_exempt
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
@@ -793,17 +794,15 @@ def get_paper_inconference_admin(request):
         required=['user_id', 'conference_id', 'max_papers_per_reviewer', 'required_reviewers_per_paper']
     ),
     responses={
-        200: 'Reviewers assigned successfully',
+        201: openapi.Response('Automatic assignment successful'),
         400: 'Bad request',
         405: 'Method not allowed'
     }
 )
-@csrf_exempt
 @api_view(['POST'])
 def automatic_assign_reviewers(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST requests are allowed'}, status=405)
-
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id')
@@ -811,25 +810,34 @@ def automatic_assign_reviewers(request):
         max_papers_per_reviewer = data.get('max_papers_per_reviewer')
         required_reviewers_per_paper = data.get('required_reviewers_per_paper')
         penalty_weight = 5  # Peso della penalità per assegnazioni non gradite
-
+        
         if not all([user_id, conference_id, max_papers_per_reviewer, required_reviewers_per_paper]):
             return JsonResponse({'error': 'Missing required fields.'}, status=400)
-
+    
         try:
             user = User.objects.get(id=user_id)
             conference = Conference.objects.get(id=conference_id)
         except (User.DoesNotExist, Conference.DoesNotExist):
             return JsonResponse({'error': 'User or Conference not found.'}, status=404)
-
+        
         if not ConferenceRole.objects.filter(conference=conference, user=user, role='admin').exists():
             return JsonResponse({'error': 'Permission denied. User is not an admin.'}, status=403)
-
+    
         papers = Paper.objects.filter(conference=conference)
         reviewer_roles = ConferenceRole.objects.filter(conference=conference, role='reviewer').select_related('user')
-
+    
         if not reviewer_roles.exists():
             return JsonResponse({'error': 'No reviewers found for this conference.'}, status=404)
-
+        
+        if not papers.exists():
+            return JsonResponse({'error': 'No papers found for this conference.'}, status=404)
+        
+        if max_papers_per_reviewer < required_reviewers_per_paper:
+            return JsonResponse({'error': 'Max papers per reviewer must be greater than or equal to required reviewers per paper.'}, status=400)
+        
+        if max_papers_per_reviewer < 1 or required_reviewers_per_paper < 1:
+            return JsonResponse({'error': 'Max papers per reviewer and required reviewers per paper must be greater than 0.'}, status=400)
+        
         # creazione del problema di ottimizzazione
         # voglio massimizzare la soddisfazione totale dei revisori, assegnando loro i paper che preferiscono
         # ma rispettando i vincoli di assegnamento
@@ -905,6 +913,12 @@ def automatic_assign_reviewers(request):
 
             PaperReviewAssignment.objects.bulk_create(new_assignments)
 
+            # trovo la conferenza con l'id specificato e imposto il campo reviewers_assigned a True
+            conference = Conference.objects.get(id=conference_id)
+            # Aggiorna il campo automatic_assign_status nella tabella Conference
+            conference.automatic_assign_status = True
+            conference.save()
+
         return JsonResponse({
             'message': 'Reviewers assigned successfully.'
         }, status=201)
@@ -913,11 +927,12 @@ def automatic_assign_reviewers(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+        
 
 
 
 ## method to get all the papers in a specific conference w pagination
-
+@csrf_exempt
 @swagger_auto_schema(
     method='get',
     operation_description="Get all papers in a conference.",
@@ -933,7 +948,6 @@ def automatic_assign_reviewers(request):
         405: 'Method not allowed'
     }
 )
-@csrf_exempt
 @api_view(['GET'])
 def get_all_papers(request, conference_id):
     try:
@@ -971,3 +985,61 @@ def get_all_papers(request, conference_id):
         'pages': paginator.num_pages,
         'total': paginator.count
     }, safe=False, status=200)
+
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'conference_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID of the conference')
+        },
+        required=['conference_id']
+    ),
+    responses={
+        200: openapi.Response('Status retrieved successfully', openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'automatic_assign_status': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                'status': openapi.Schema(type=openapi.TYPE_INTEGER)
+            }
+        )),
+        400: 'Bad request',
+        404: 'Conference not found'
+    }
+)
+@api_view(['POST'])
+@csrf_exempt
+def get_automatic_assign_status(request):
+    if request.method != 'POST':
+        return JsonResponse({"error": "Only POST requests are allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        conference_id = data.get('conference_id')
+
+        if not conference_id:
+            return JsonResponse({'error': 'Missing required field: conference_id'}, status=400)
+
+        try:
+            conference = Conference.objects.get(id=conference_id)
+        except Conference.DoesNotExist:
+            return JsonResponse({'error': 'Conference not found'}, status=404)
+
+        # Controlla la presenza di almeno un paper e almeno un revisore
+        has_papers = Paper.objects.filter(conference=conference).exists()
+        has_reviewers = ConferenceRole.objects.filter(conference=conference, role='reviewer').exists()
+
+        if conference.automatic_assign_status:
+            status = 1
+        else:
+            status = 1 if has_papers and has_reviewers else 0
+
+        return JsonResponse({
+            'automatic_assign_status': conference.automatic_assign_status,
+            'status': status
+        }, status=200)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

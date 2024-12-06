@@ -10,6 +10,7 @@ class Conference(models.Model):
     deadline = models.DateTimeField()  # Deadline specifica per la conferenza
     description = models.TextField()  # Descrizione della conferenza
     papers_deadline = models.DateTimeField(default=datetime.now)  # Deadline per la sottomissione dei paper
+    automatic_assign_status = models.BooleanField(default=False)  # Stato di assegnazione automatica dei revisori
 
     def __str__(self):
         return self.title
