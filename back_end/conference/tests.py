@@ -47,6 +47,7 @@ class ConferenceCreationTests(TestCase):
             "description": "Description of the test conference",
             "reviewers": [{"email": self.reviewer.email}],
             "papers_deadline": (timezone.now() + timezone.timedelta(days=5)).isoformat(),
+            "status": "none"
         }
         response = self.client.post(
             self.url,
@@ -104,7 +105,7 @@ class ConferenceCreationTests(TestCase):
         payload = {
             "title": "Test Conference",
             "admin_id": self.admin_user.id,
-            # Missing deadline, description, authors, and reviewers
+            # Missing deadline, description, authors, reviewers and status
         }
         response = self.client.post(
             self.url,
@@ -182,6 +183,31 @@ class ConferenceCreationTests(TestCase):
             content_type="application/json"
         )
         self.assertEqual(response.status_code, 400)
+    
+    def test_create_conference_invalid_status(self):
+        """Test for invalid status value"""
+
+        self.client.force_login(self.admin_user)
+
+        session = self.client.session
+        session['_auth_user_id'] = self.admin_user.id
+        session.save()
+
+        payload = {
+            "title": "Test Conference",
+            "deadline": (timezone.now() + timezone.timedelta(days=7)).isoformat(),
+            "description": "Description of the test conference",
+            "reviewers": [{"email": self.reviewer.email}],
+            "status": "invalid_status"
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error'], 'Missing required fields')
 
 class DeleteConferenceTestCase(TestCase):
     def setUp(self):
