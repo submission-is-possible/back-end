@@ -535,7 +535,8 @@ class AutomaticAssignReviewersTest(TestCase):
             deadline=timezone.now() + timezone.timedelta(days=30),
             description='This is a test conference',
             papers_deadline=timezone.now() + timezone.timedelta(days=15),
-            automatic_assign_status=False
+            automatic_assign_status=False,
+            status='none'
         )
 
         ConferenceRole.objects.create(user=self.admin, conference=self.conference, role='admin')
@@ -576,3 +577,109 @@ class AutomaticAssignReviewersTest(TestCase):
 
         for paper in [self.paper1, self.paper2, self.paper3]:
             self.assertEqual(assignments.filter(paper=paper).count(), 2)
+
+class GetPaperInConferenceReviewer(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create(first_name='Admin', last_name='User', email='admin@example.com', password='adminpass')
+        self.reviewer1 = User.objects.create(first_name='Reviewer', last_name='One', email='reviewer1@example.com', password='reviewerpass1')
+        self.reviewer2 = User.objects.create(first_name='Reviewer', last_name='Two', email='reviewer2@example.com', password='reviewerpass2')
+        self.reviewer3 = User.objects.create(first_name='Reviewer', last_name='Three', email='reviewer3@example.com', password='reviewerpass3')
+
+        self.conference = Conference.objects.create(
+            title='Test Conference',
+            admin_id=self.admin,
+            deadline=timezone.now() + timezone.timedelta(days=30),
+            description='This is a test conference',
+            papers_deadline=timezone.now() + timezone.timedelta(days=15),
+            automatic_assign_status=False,
+            status='double_blind'
+        )
+
+        ConferenceRole.objects.create(user=self.admin, conference=self.conference, role='admin')
+        ConferenceRole.objects.create(user=self.reviewer1, conference=self.conference, role='reviewer')
+        ConferenceRole.objects.create(user=self.reviewer2, conference=self.conference, role='reviewer')
+        ConferenceRole.objects.create(user=self.reviewer3, conference=self.conference, role='reviewer')
+
+        self.paper1 = Paper.objects.create(title='Paper 1', conference=self.conference, author_id=self.admin, status_id='submitted')
+        self.paper2 = Paper.objects.create(title='Paper 2', conference=self.conference, author_id=self.admin, status_id='submitted')
+        self.paper3 = Paper.objects.create(title='Paper 3', conference=self.conference, author_id=self.admin, status_id='submitted')
+    
+    def test_get_paper_in_conference_reviewer(self):
+        """Test retrieving papers assigned to a reviewer in a conference"""
+        # First, create some paper review assignments
+        PaperReviewAssignment.objects.create(
+            conference=self.conference, 
+            paper=self.paper1, 
+            reviewer=self.reviewer1,
+            status='assigned'
+        )
+        PaperReviewAssignment.objects.create(
+            conference=self.conference, 
+            paper=self.paper2, 
+            reviewer=self.reviewer1,
+            status='assigned'
+        )
+
+        client = Client()
+        client.force_login(self.reviewer1)
+        session = client.session
+        session['_auth_user_id'] = self.reviewer1.id
+        session.save()
+
+        response = client.post('/conference/get_paper_inconference_reviewer/', json.dumps({
+            'conference_id': self.conference.id,
+            'user_id': self.reviewer1.id
+        }), content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('papers', response.json())
+        self.assertEqual(len(response.json()['papers']), 2)
+        self.assertEqual(response.json()['papers'][0]['title'], 'Paper 1')
+        self.assertEqual(response.json()['papers'][1]['title'], 'Paper 2')
+    
+    def test_get_paper_in_conference_reviewer_double_blind(self):
+        """Test retrieving papers assigned to a reviewer in a double-blind conference"""
+        # First, create some paper review assignments
+        PaperReviewAssignment.objects.create(
+            conference=self.conference, 
+            paper=self.paper1, 
+            reviewer=self.reviewer1,
+            status='assigned'
+        )
+        PaperReviewAssignment.objects.create(
+            conference=self.conference, 
+            paper=self.paper2, 
+            reviewer=self.reviewer1,
+            status='assigned'
+        )
+
+        client = Client()
+        client.force_login(self.reviewer1)
+        session = client.session
+        session['_auth_user_id'] = self.reviewer1.id
+        session.save()
+
+        response = client.post('/conference/get_paper_inconference_reviewer/', json.dumps({
+            'conference_id': self.conference.id,
+            'user_id': self.reviewer1.id
+        }), content_type='application/json')
+
+        # Parse the response JSON
+        response_data = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+
+        # Verify the papers in the response
+        self.assertTrue('papers' in response_data, "Response should contain 'papers' key")
+        papers = response_data['papers']
+
+        # Check that we have the expected number of papers
+        self.assertEqual(len(papers), 2, "Should have 2 papers assigned to the reviewer")
+
+        # Verify each paper's author is "Anonymous"
+        for paper in papers:
+            self.assertEqual(paper['author'], "Anonymous", "Author should be Anonymous in double-blind conference")
+
+        paper_ids = [paper['id'] for paper in papers]
+        self.assertIn(self.paper1.id, paper_ids)
+        self.assertIn(self.paper2.id, paper_ids)

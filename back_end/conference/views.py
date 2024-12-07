@@ -229,8 +229,7 @@ def delete_conference(request):
             'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY,
                                         items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                                             'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
-                                        })),
-            'status': openapi.Schema(type=openapi.TYPE_STRING, description='New blinding status (none/single_blind/double_blind)')     
+                                        }))  
         }
     ),
     responses={
@@ -255,7 +254,6 @@ def edit_conference(request):
             description = data.get('description')
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
-            status = data.get('status')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -318,9 +316,6 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
-            
-            if status:
-                conference.status = status
 
             ## the submission deadline must still be before the conference deadline
             if conference.deadline < conference.papers_deadline:
@@ -549,10 +544,12 @@ def get_paper_inconference_reviewer(request):
         paginator = Paginator(assignments, page_size)
         page_obj = paginator.get_page(page_number)
 
+        conference = Conference.objects.get(id=conference_id)
+
         papers_data = [{
             "id": assignment.paper.id,
             "title": assignment.paper.title,
-            "author": assignment.paper.author_id.last_name + " " + assignment.paper.author_id.first_name,
+            "author": "Anonymous" if conference.status == 'double_blind' else assignment.paper.author_id.last_name + " " + assignment.paper.author_id.first_name,
             "status": assignment.paper.status_id,  # status del paper (submitted/accepted/rejected)
             "paper_file": assignment.paper.paper_file.url if assignment.paper.paper_file else None,
         } for assignment in page_obj]
