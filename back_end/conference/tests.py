@@ -345,7 +345,8 @@ class EditConferenceTest(TestCase):
             admin_id=self.user_admin,
             created_at=timezone.now(),
             deadline=timezone.now() + timezone.timedelta(days=10),
-            description="Conference description"
+            description="Conference description",
+            status='none'
         )
         
         self.client.force_login(self.user_admin)
@@ -366,6 +367,7 @@ class EditConferenceTest(TestCase):
                 'user_id': self.user_admin.id,
                 'title': 'Updated Conference Title',
                 'description': 'Updated description',
+                'status': 'double_blind'
             }),
             content_type="application/json"
 

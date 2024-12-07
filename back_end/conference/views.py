@@ -229,7 +229,8 @@ def delete_conference(request):
             'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY,
                                         items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                                             'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
-                                        }))  
+                                        })),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='Blinding status (none/single_blind/double_blind)')
         }
     ),
     responses={
@@ -247,13 +248,13 @@ def edit_conference(request):
     if request.method == 'PATCH':
         try:
             data = json.loads(request.body)
-            print (data)
             conference_id = data.get('conference_id')
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
+            status = data.get('status')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -316,6 +317,8 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+            if status:
+                conference.status = status
 
             ## the submission deadline must still be before the conference deadline
             if conference.deadline < conference.papers_deadline:
