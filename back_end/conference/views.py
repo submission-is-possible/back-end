@@ -72,7 +72,7 @@ def create_conference(request):
                 return JsonResponse({'error': 'Missing required fields'}, status=400)
 
             if reviewers is None:
-                return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
+                return JsonResponse({'error': 'Reviewers must be provided'}, status=400)
 
             ## la submission deadline deve essere prima della deadline della conferenza
             if deadline < papers_deadline:
@@ -980,15 +980,28 @@ def get_all_papers(request, conference_id):
     except EmptyPage:
         paginated_papers = paginator.page(paginator.num_pages)
 
+    conference = Conference.objects.get(id=conference_id)
+
     papers_list = []
-    for paper in paginated_papers:
-        papers_list.append({
-            'id': paper.id,
-            'title': paper.title,
-            'author': paper.author_id.email,
-            'status': paper.status_id,
-            'paper_file': paper.paper_file.url if paper.paper_file else None
-        })
+
+    if conference.status == 'double_blind':
+        for paper in paginated_papers:
+            papers_list.append({
+                'id': paper.id,
+                'title': paper.title,
+                'author': 'Anonymous',
+                'status': paper.status_id,
+                'paper_file': paper.paper_file.url if paper.paper_file else None
+            })
+    else:
+        for paper in paginated_papers:
+            papers_list.append({
+                'id': paper.id,
+                'title': paper.title,
+                'author': paper.author_id.last_name + ' ' + paper.author_id.first_name,
+                'status': paper.status_id,
+                'paper_file': paper.paper_file.url if paper.paper_file else None
+            })
 
     return JsonResponse({
         'papers': papers_list,
