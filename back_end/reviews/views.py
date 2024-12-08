@@ -314,7 +314,12 @@ def create_review(request):
         confidence_level = data.get('confidence_level')
 
         print("DEBUGGING THE CREATE NOW")
-        print (request)
+        print ([
+            paper_id,
+            comment_text,
+            score,
+            confidence_level
+        ])
 
         if not all([paper_id, comment_text, score]):
             return JsonResponse({"error": "Tutti i campi sono obbligatori"}, status=status.HTTP_400_BAD_REQUEST)
@@ -336,11 +341,15 @@ def create_review(request):
         ##user = request.user
         # cancella poi, è per forzare l'utente
         user = User.objects.get(id=data.get('user_id'))
-
+    
         if Review.objects.filter(paper=paper, user=user).exists():
             return JsonResponse({"error": "Hai già recensito questo paper"}, status=status.HTTP_400_BAD_REQUEST)
 
-        review = Review.objects.create(paper=paper, user=user, comment_text=comment_text, score=score)
+        try:
+            review = Review.objects.create(paper=paper, user=user, comment_text=comment_text, score=score, confidence_level=confidence_level)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
         return JsonResponse({
             "id": review.id,
             "paper_id": review.paper.id,
