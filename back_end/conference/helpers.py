@@ -59,7 +59,7 @@ def send_invitation_email(to_email, conference_title, admin_user):
             <div class="content">
                 <p>Hello,</p>
                 <p>You have been invited by {admin_user.first_name} {admin_user.last_name} to be a reviewer for the conference "<strong>{conference_title}</strong>".</p>
-                <p>For more information, please visit the homepage of our website:</p>
+                <p>For more information, please visit our website:</p>
                 <a href="http://example.com" class="button">Go to SubmissionIsPossible</a>
                 <p>Thank you,</p>
                 <p>The SubmissionIsPossible Team</p>
