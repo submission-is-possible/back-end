@@ -1,9 +1,9 @@
 from django.core.mail import EmailMultiAlternatives
 
-def send_invitation_email(to_email, conference_title, admin_user):
-    subject = f'Invite to be a reviewer for the conference "{conference_title}"'
+def send_reviewer_acceptance_email(admin_user, reviewer_user, conference_title):
+    subject = f'Reviewer Acceptance for the conference "{conference_title}"'
     from_email = 'submissionispossible6@gmail.com'
-    text_content = f'You have been invited by {admin_user.first_name} {admin_user.last_name} to be a reviewer for the conference "{conference_title}".'
+    text_content = f'{reviewer_user.first_name} {reviewer_user.last_name} has accepted the invitation to be a reviewer for the conference "{conference_title}".'
 
     email_content = f"""
     <!DOCTYPE html>
@@ -54,12 +54,12 @@ def send_invitation_email(to_email, conference_title, admin_user):
     <body>
         <div class="container">
             <div class="header">
-                <h1>Invite to a Conference</h1>
+                <h1>Reviewer Acceptance Notification</h1>
             </div>
             <div class="content">
                 <p>Hello,</p>
-                <p>You have been invited by {admin_user.first_name} {admin_user.last_name} to be a reviewer for the conference "<strong>{conference_title}</strong>".</p>
-                <p>For more information, please visit our website:</p>
+                <p>{reviewer_user.first_name} {reviewer_user.last_name} has accepted the invitation to be a reviewer for the conference "<strong>{conference_title}</strong>".</p>
+                <p>For more information, please visit our website: </p>
                 <a href="http://http://localhost:5173/login" class="button">Go to SubmissionIsPossible</a>
                 <p>Thank you,</p>
                 <p>The SubmissionIsPossible Team</p>
@@ -69,6 +69,6 @@ def send_invitation_email(to_email, conference_title, admin_user):
     </html>
     """
 
-    msg = EmailMultiAlternatives(subject, text_content, from_email, [to_email])
+    msg = EmailMultiAlternatives(subject, text_content, from_email, [admin_user.email])
     msg.attach_alternative(email_content, "text/html")
     msg.send()
