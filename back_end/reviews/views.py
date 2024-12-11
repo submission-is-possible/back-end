@@ -6,6 +6,7 @@ from rest_framework import status
 
 from papers.models import Paper
 from users.models import User
+from conference_roles.models import ConferenceRole
 from .models import Review
 from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
@@ -207,6 +208,7 @@ esempio di risposta json della funzione:
 )
 @api_view(['GET'])
 @csrf_exempt
+@get_user
 def get_paper_reviews(request): 
     """Restituisce una lista di recensioni di un paper specifico, con dettagli sugli utenti e paginazione."""
 
@@ -231,41 +233,59 @@ def get_paper_reviews(request):
     page_obj = paginator.get_page(page_number)
 
     conference = Paper.objects.get(id=paper_id).conference
+    current_user_role = ConferenceRole.objects.get(conference=conference, user=request.user).role
 
-    if conference.status == 'single_blind' or conference.status == 'double_blind':
-        # Nascondi i dettagli dell'utente se la conferenza è single o double blind
-        reviews_data = [
-            {
-                "user": {
-                    "id": review.user.id,
-                    "first_name": "Anonymous", 
-                    "last_name": "Reviewer",
-                    "email": "***"
-                },
-                "comment_text": review.comment_text,
-                "score": review.score,
-                "confidence_level": review.confidence_level,
-                "created_at": review.created_at.isoformat()
-            }
-            for review in page_obj
-        ]
-    else:
-        # Costruisci i dati per la risposta JSON
-        reviews_data = [
-            {
-                "user": {
-                    "id": review.user.id,
-                    "first_name": review.user.first_name,
-                    "last_name": review.user.last_name,
-                    "email": review.user.email
-                },
-                "comment_text": review.comment_text,
-                "score": review.score,
-                "confidence_level": review.confidence_level,
-                "created_at": review.created_at.isoformat()
-            }
-            for review in page_obj
-        ]
+    match(current_user_role):
+        case 'author':
+            if (conference.status == 'single_blind' or conference.status == 'double_blind'):
+                # Nascondi i dettagli dell'utente se la conferenza è single o double blind
+                reviews_data = [
+                    {
+                        "user": {
+                            "id": review.user.id,
+                            "first_name": "Anonymous", 
+                            "last_name": "Reviewer",
+                            "email": "***"
+                        },
+                        "comment_text": review.comment_text,
+                        "score": review.score,
+                        "confidence_level": review.confidence_level,
+                        "created_at": review.created_at.isoformat()
+                    }
+                    for review in page_obj
+                ]
+            else:
+                reviews_data = [
+                    {
+                        "user": {
+                            "id": review.user.id,
+                            "first_name": review.user.first_name,
+                            "last_name": review.user.last_name,
+                            "email": review.user.email
+                        },
+                        "comment_text": review.comment_text,
+                        "score": review.score,
+                        "confidence_level": review.confidence_level,
+                        "created_at": review.created_at.isoformat()
+                    }
+                    for review in page_obj
+                ]
+        case 'admin':
+            reviews_data = [
+                {
+                    "user": {
+                        "id": review.user.id,
+                        "first_name": review.user.first_name,
+                        "last_name": review.user.last_name,
+                        "email": review.user.email
+                    },
+                    "comment_text": review.comment_text,
+                    "score": review.score,
+                    "confidence_level": review.confidence_level,
+                    "created_at": review.created_at.isoformat()
+                }
+                for review in page_obj
+            ]
 
     response_data = {
         "current_page": page_obj.number,
