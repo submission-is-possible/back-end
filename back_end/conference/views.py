@@ -440,7 +440,8 @@ def get_conferences(request):
                 'description': conference.description,
                 'admin_id': conference.admin_id.email,
                 'created_at': conference.created_at,
-                'papers_deadline': conference.papers_deadline
+                'papers_deadline': conference.papers_deadline,
+                'status': conference.status
             })
 
         paginator = Paginator(conferences_list, page_size)
