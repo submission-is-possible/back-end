@@ -233,44 +233,30 @@ def get_paper_reviews(request):
     page_obj = paginator.get_page(page_number)
 
     conference = Paper.objects.get(id=paper_id).conference
-    current_user_role = ConferenceRole.objects.get(conference=conference, user=request.user).role
 
-    match(current_user_role):
-        case 'author':
-            if (conference.status == 'single_blind' or conference.status == 'double_blind'):
-                # Nascondi i dettagli dell'utente se la conferenza è single o double blind
-                reviews_data = [
-                    {
-                        "user": {
-                            "id": review.user.id,
-                            "first_name": "Anonymous", 
-                            "last_name": "Reviewer",
-                            "email": "***"
-                        },
-                        "comment_text": review.comment_text,
-                        "score": review.score,
-                        "confidence_level": review.confidence_level,
-                        "created_at": review.created_at.isoformat()
-                    }
-                    for review in page_obj
-                ]
-            else:
-                reviews_data = [
-                    {
-                        "user": {
-                            "id": review.user.id,
-                            "first_name": review.user.first_name,
-                            "last_name": review.user.last_name,
-                            "email": review.user.email
-                        },
-                        "comment_text": review.comment_text,
-                        "score": review.score,
-                        "confidence_level": review.confidence_level,
-                        "created_at": review.created_at.isoformat()
-                    }
-                    for review in page_obj
-                ]
-        case 'admin':
+    is_admin = ConferenceRole.objects.filter(conference=conference, user=request.user, role='admin').exists()
+    is_reviewer = ConferenceRole.objects.filter(conference=conference, user=request.user, role='reviewer').exists()
+    is_author = ConferenceRole.objects.filter(conference=conference, user=request.user, role='author').exists()
+
+    if is_author and not is_admin:
+        if (conference.status == 'single_blind' or conference.status == 'double_blind'):
+            # Nascondi i dettagli dell'utente se la conferenza è single o double blind
+            reviews_data = [
+                {
+                    "user": {
+                        "id": review.user.id,
+                        "first_name": "Anonymous", 
+                        "last_name": "Reviewer",
+                        "email": "***"
+                    },
+                    "comment_text": review.comment_text,
+                    "score": review.score,
+                    "confidence_level": review.confidence_level,
+                    "created_at": review.created_at.isoformat()
+                }
+                for review in page_obj
+            ]
+        else:
             reviews_data = [
                 {
                     "user": {
@@ -286,6 +272,22 @@ def get_paper_reviews(request):
                 }
                 for review in page_obj
             ]
+    else:
+        reviews_data = [
+            {
+                "user": {
+                    "id": review.user.id,
+                    "first_name": review.user.first_name,
+                    "last_name": review.user.last_name,
+                    "email": review.user.email
+                },
+                "comment_text": review.comment_text,
+                "score": review.score,
+                "confidence_level": review.confidence_level,
+                "created_at": review.created_at.isoformat()
+            }
+            for review in page_obj
+        ]
 
     response_data = {
         "current_page": page_obj.number,
