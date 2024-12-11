@@ -147,7 +147,8 @@ class GetPaperReviewsTest(TestCase):
             admin_id=self.user,
             created_at=timezone.now(),
             deadline=timezone.now() + timezone.timedelta(days=30),
-            description="A test conference"
+            description="A test conference",
+            status="single_blind"
         )
 
         # Creazione di un paper di test
@@ -245,6 +246,18 @@ class GetPaperReviewsTest(TestCase):
         self.assertEqual(data["total_reviews"], 17)
         self.assertEqual(data["total_pages"], 2)
 
+    def test_get_reviewer_name_if_single_blind(self):
+        """Test per verificare che il nome dell'autore della recensione venga restituito come Anonymous se la conferenza è single blind."""
+        response = self.client.get(
+            f"{self.url}?paper_id={self.paper.id}",
+            content_type="application/json"
+        )
+        
+        data = response.json()
+        self.assertEqual(data["reviews"][0]["user"]["first_name"], "Anonymous")
+        self.assertEqual(data["reviews"][0]["user"]["last_name"], "Reviewer")
+        self.assertEqual(data["reviews"][1]["user"]["first_name"], "Anonymous")
+        self.assertEqual(data["reviews"][1]["user"]["last_name"], "Reviewer")
 
 
 
@@ -351,5 +364,3 @@ class CreateReviewTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Review.objects.count(), 1)
-
-
