@@ -5,6 +5,7 @@ from reviews.models import Review
 from users.models import User
 from papers.models import Paper
 from conference.models import Conference
+from conference_roles.models import ConferenceRole
 import json
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -141,6 +142,19 @@ class GetPaperReviewsTest(TestCase):
             password="testpassword"
         )
 
+        self.user2 = User.objects.create(
+            first_name="Test2",
+            last_name="User2",
+            email="email"
+        )
+
+        self.user3 = User.objects.create(
+            first_name="Test3",
+            last_name="User3",
+            email="email3"
+        )
+
+
         # Creazione di una conferenza di test
         self.conference = Conference.objects.create(
             title="Test Conference",
@@ -149,6 +163,24 @@ class GetPaperReviewsTest(TestCase):
             deadline=timezone.now() + timezone.timedelta(days=30),
             description="A test conference",
             status="single_blind"
+        )
+
+        self.conference_role = ConferenceRole.objects.create(
+            user=self.user,
+            conference=self.conference,
+            role="reviewer"
+        )
+
+        self.conference_role2 = ConferenceRole.objects.create(
+            user=self.user2,
+            conference=self.conference,
+            role="admin"
+        )
+
+        self.conference_role3 = ConferenceRole.objects.create(
+            user=self.user3,
+            conference=self.conference,
+            role="author"
         )
 
         # Creazione di un paper di test
@@ -184,6 +216,13 @@ class GetPaperReviewsTest(TestCase):
 
     def test_get_paper_reviews_success(self):
         """Test per una richiesta valida con un paper_id e verifica della paginazione."""
+
+        #login dell'utente
+        self.client.force_login(self.user2)
+        session = self.client.session
+        session['_auth_user_id'] = self.user2.id
+        session.save()
+
         response = self.client.get(
             f"{self.url}?paper_id={self.paper.id}",
             content_type="application/json"
@@ -212,6 +251,13 @@ class GetPaperReviewsTest(TestCase):
 
     def test_get_paper_reviews_missing_paper_id(self):
         """Test per verificare la gestione di una richiesta senza paper_id."""
+
+        #login dell'utente
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['_auth_user_id'] = self.user.id
+        session.save()
+
         response = self.client.get(
             self.url,
             content_type="application/json"
@@ -231,6 +277,12 @@ class GetPaperReviewsTest(TestCase):
                 confidence_level=1,
                 created_at=timezone.now()
             )
+        
+        #login dell'utente
+        self.client.force_login(self.user2)
+        session = self.client.session
+        session['_auth_user_id'] = self.user2.id
+        session.save()
 
         response = self.client.get(
             f"{self.url}?page=2&page_size=10&paper_id={self.paper.id}",
@@ -248,6 +300,13 @@ class GetPaperReviewsTest(TestCase):
 
     def test_get_reviewer_name_if_single_blind(self):
         """Test per verificare che il nome dell'autore della recensione venga restituito come Anonymous se la conferenza è single blind."""
+
+        #login dell'utente
+        self.client.force_login(self.user3)
+        session = self.client.session
+        session['_auth_user_id'] = self.user3.id
+        session.save()
+
         response = self.client.get(
             f"{self.url}?paper_id={self.paper.id}",
             content_type="application/json"
