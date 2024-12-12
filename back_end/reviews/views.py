@@ -6,6 +6,7 @@ from rest_framework import status
 
 from papers.models import Paper
 from users.models import User
+from conference_roles.models import ConferenceRole
 from .models import Review
 from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
@@ -207,6 +208,7 @@ esempio di risposta json della funzione:
 )
 @api_view(['GET'])
 @csrf_exempt
+@get_user
 def get_paper_reviews(request): 
     """Restituisce una lista di recensioni di un paper specifico, con dettagli sugli utenti e paginazione."""
 
@@ -230,22 +232,62 @@ def get_paper_reviews(request):
     paginator = Paginator(reviews, page_size)
     page_obj = paginator.get_page(page_number)
 
-    # Costruisci i dati per la risposta JSON
-    reviews_data = [
-        {
-            "user": {
-                "id": review.user.id,
-                "first_name": review.user.first_name,
-                "last_name": review.user.last_name,
-                "email": review.user.email
-            },
-            "comment_text": review.comment_text,
-            "score": review.score,
-            "confidence_level": review.confidence_level,
-            "created_at": review.created_at.isoformat()
-        }
-        for review in page_obj
-    ]
+    conference = Paper.objects.get(id=paper_id).conference
+
+    is_admin = ConferenceRole.objects.filter(conference=conference, user=request.user, role='admin').exists()
+    is_reviewer = ConferenceRole.objects.filter(conference=conference, user=request.user, role='reviewer').exists()
+    is_author = ConferenceRole.objects.filter(conference=conference, user=request.user, role='author').exists()
+
+    if is_author and not is_admin:
+        if (conference.status == 'single_blind' or conference.status == 'double_blind'):
+            # Nascondi i dettagli dell'utente se la conferenza è single o double blind
+            reviews_data = [
+                {
+                    "user": {
+                        "id": review.user.id,
+                        "first_name": "Anonymous", 
+                        "last_name": "Reviewer",
+                        "email": "***"
+                    },
+                    "comment_text": review.comment_text,
+                    "score": review.score,
+                    "confidence_level": review.confidence_level,
+                    "created_at": review.created_at.isoformat()
+                }
+                for review in page_obj
+            ]
+        else:
+            reviews_data = [
+                {
+                    "user": {
+                        "id": review.user.id,
+                        "first_name": review.user.first_name,
+                        "last_name": review.user.last_name,
+                        "email": review.user.email
+                    },
+                    "comment_text": review.comment_text,
+                    "score": review.score,
+                    "confidence_level": review.confidence_level,
+                    "created_at": review.created_at.isoformat()
+                }
+                for review in page_obj
+            ]
+    else:
+        reviews_data = [
+            {
+                "user": {
+                    "id": review.user.id,
+                    "first_name": review.user.first_name,
+                    "last_name": review.user.last_name,
+                    "email": review.user.email
+                },
+                "comment_text": review.comment_text,
+                "score": review.score,
+                "confidence_level": review.confidence_level,
+                "created_at": review.created_at.isoformat()
+            }
+            for review in page_obj
+        ]
 
     response_data = {
         "current_page": page_obj.number,
@@ -314,7 +356,12 @@ def create_review(request):
         confidence_level = data.get('confidence_level')
 
         print("DEBUGGING THE CREATE NOW")
-        print (request)
+        print ([
+            paper_id,
+            comment_text,
+            score,
+            confidence_level
+        ])
 
         if not all([paper_id, comment_text, score]):
             return JsonResponse({"error": "Tutti i campi sono obbligatori"}, status=status.HTTP_400_BAD_REQUEST)
@@ -336,11 +383,15 @@ def create_review(request):
         ##user = request.user
         # cancella poi, è per forzare l'utente
         user = User.objects.get(id=data.get('user_id'))
-
+    
         if Review.objects.filter(paper=paper, user=user).exists():
             return JsonResponse({"error": "Hai già recensito questo paper"}, status=status.HTTP_400_BAD_REQUEST)
 
-        review = Review.objects.create(paper=paper, user=user, comment_text=comment_text, score=score)
+        try:
+            review = Review.objects.create(paper=paper, user=user, comment_text=comment_text, score=score, confidence_level=confidence_level)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
         return JsonResponse({
             "id": review.id,
             "paper_id": review.paper.id,

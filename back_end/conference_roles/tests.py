@@ -106,13 +106,15 @@ class GetUserConferencesTests(TestCase):
             title="AI Conference",
             admin_id=self.user,
             deadline=timezone.now() + timezone.timedelta(days=30),
-            description="A conference on AI advancements."
+            description="A conference on AI advancements.",
+            status="single_blind"
         )
         self.conference2 = Conference.objects.create(
             title="Tech Summit",
             admin_id=self.user,
             deadline=timezone.now() + timezone.timedelta(days=60),
-            description="An annual tech summit."
+            description="An annual tech summit.",
+            status="double_blind"
         )
          # Associa le conferenze all'utente tramite 'conference_roles'
         ConferenceRole.objects.create(user=self.user, conference=self.conference1)
