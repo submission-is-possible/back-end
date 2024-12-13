@@ -44,7 +44,8 @@ import  assign_paper_reviewers, conference_roles, notifications, papers
                                             'email': openapi.Schema(type=openapi.TYPE_STRING,
                                                                     description='Email of reviewer')
                                         })),
-            'papers_deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for paper submissions')
+            'papers_deadline': openapi.Schema(type=openapi.TYPE_STRING, description='Deadline for paper submissions'),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='Blinding status (none/single_blind/double_blind)')
         }
     ),
     responses={
@@ -65,16 +66,20 @@ def create_conference(request):
             description = data.get('description')
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
+            status = data.get('status')
 
             if not (title and deadline and description and papers_deadline):
                 return JsonResponse({'error': 'Missing required fields'}, status=400)
 
             if reviewers is None:
-                return JsonResponse({'error': 'Authors and reviewers must be provided, even if empty'}, status=400)
+                return JsonResponse({'error': 'Reviewers must be provided'}, status=400)
 
             ## la submission deadline deve essere prima della deadline della conferenza
             if deadline < papers_deadline:
                 return JsonResponse({'error': 'Submission deadline must be before conference deadline'}, status=400)
+
+            if status not in ['none', 'single_blind', 'double_blind']:
+                return JsonResponse({'error': 'Invalid status'}, status=400)
 
             admin_user = request.user
 
@@ -101,7 +106,8 @@ def create_conference(request):
                 created_at=timezone.now(),
                 deadline=deadline,
                 description=description,
-                papers_deadline=papers_deadline
+                papers_deadline=papers_deadline,
+                status=status
             )
 
             # Create the admin role for the user
@@ -223,7 +229,8 @@ def delete_conference(request):
             'reviewers': openapi.Schema(type=openapi.TYPE_ARRAY,
                                         items=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
                                             'email': openapi.Schema(type=openapi.TYPE_STRING, description='Email of reviewer')
-                                        }))
+                                        })),
+            'status': openapi.Schema(type=openapi.TYPE_STRING, description='Blinding status (none/single_blind/double_blind)')
         }
     ),
     responses={
@@ -241,13 +248,13 @@ def edit_conference(request):
     if request.method == 'PATCH':
         try:
             data = json.loads(request.body)
-            print (data)
             conference_id = data.get('conference_id')
             title = data.get('title')
             deadline = data.get('deadline')
             description = data.get('description')
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
+            status = data.get('status')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -310,6 +317,8 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+            if status:
+                conference.status = status
 
             ## the submission deadline must still be before the conference deadline
             if conference.deadline < conference.papers_deadline:
@@ -431,7 +440,8 @@ def get_conferences(request):
                 'description': conference.description,
                 'admin_id': conference.admin_id.email,
                 'created_at': conference.created_at,
-                'papers_deadline': conference.papers_deadline
+                'papers_deadline': conference.papers_deadline,
+                'status': conference.status
             })
 
         paginator = Paginator(conferences_list, page_size)
@@ -538,10 +548,12 @@ def get_paper_inconference_reviewer(request):
         paginator = Paginator(assignments, page_size)
         page_obj = paginator.get_page(page_number)
 
+        conference = Conference.objects.get(id=conference_id)
+
         papers_data = [{
             "id": assignment.paper.id,
             "title": assignment.paper.title,
-            "author": assignment.paper.author_id.last_name + " " + assignment.paper.author_id.first_name,
+            "author": "Anonymous" if conference.status == 'double_blind' else assignment.paper.author_id.last_name + " " + assignment.paper.author_id.first_name,
             "status": assignment.paper.status_id,  # status del paper (submitted/accepted/rejected)
             "paper_file": assignment.paper.paper_file.url if assignment.paper.paper_file else None,
         } for assignment in page_obj]
@@ -969,15 +981,28 @@ def get_all_papers(request, conference_id):
     except EmptyPage:
         paginated_papers = paginator.page(paginator.num_pages)
 
+    conference = Conference.objects.get(id=conference_id)
+
     papers_list = []
-    for paper in paginated_papers:
-        papers_list.append({
-            'id': paper.id,
-            'title': paper.title,
-            'author': paper.author_id.email,
-            'status': paper.status_id,
-            'paper_file': paper.paper_file.url if paper.paper_file else None
-        })
+
+    if conference.status == 'double_blind':
+        for paper in paginated_papers:
+            papers_list.append({
+                'id': paper.id,
+                'title': paper.title,
+                'author': 'Anonymous',
+                'status': paper.status_id,
+                'paper_file': paper.paper_file.url if paper.paper_file else None
+            })
+    else:
+        for paper in paginated_papers:
+            papers_list.append({
+                'id': paper.id,
+                'title': paper.title,
+                'author': paper.author_id.last_name + ' ' + paper.author_id.first_name,
+                'status': paper.status_id,
+                'paper_file': paper.paper_file.url if paper.paper_file else None
+            })
 
     return JsonResponse({
         'papers': papers_list,
