@@ -10,6 +10,7 @@ from django.contrib.auth.decorators import login_required
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from users.decorators import get_user
+from reviews.models import ReviewTemplateItem
 
 @csrf_exempt
 @swagger_auto_schema(
@@ -150,6 +151,15 @@ def get_user_conferences(request):
     for role in user_conferences:
         conf_id = role.conference.id
         if conf_id not in conferences_dict:
+            templateItems = ReviewTemplateItem.objects.filter(conference_id = conf_id )
+            template = []
+            for templateItem in templateItems:
+                template.append({
+                    'label':templateItem.label,
+                    'description':templateItem.description,
+                    'has_comment':templateItem.has_comment,
+                    'has_score':templateItem.has_score,
+                })
             conferences_dict[conf_id] = {
                 "id": role.conference.id,
                 "title": role.conference.title,
@@ -159,7 +169,8 @@ def get_user_conferences(request):
                 "roles": [],
                 "user_id": role.conference.admin_id.id,
                 'papers_deadline': role.conference.papers_deadline,
-                'status': role.conference.status
+                'status': role.conference.status,
+                'reviewTemplate': template
             }
         conferences_dict[conf_id]["roles"].append(role.role)
 

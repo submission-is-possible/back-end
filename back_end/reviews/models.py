@@ -1,6 +1,7 @@
 from django.db import models
 from papers.models import Paper  # Assicurati che l'import sia corretto
 from users.models import User
+from conference.models import Conference
 
 class Review(models.Model):
     paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name="reviews")
@@ -14,3 +15,9 @@ class Review(models.Model):
         return f"Review for {self.paper.title} by {self.user.first_name} {self.user.last_name} - Score: {self.score}"
     
     
+class ReviewTemplateItem(models.Model):
+    conference = models.ForeignKey(Conference, on_delete=models.CASCADE, related_name="templateItem")
+    label = models.TextField()
+    description = models.TextField()
+    has_comment = models.BooleanField()
+    has_score = models.BooleanField()
