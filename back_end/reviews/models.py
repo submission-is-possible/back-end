@@ -21,3 +21,10 @@ class ReviewTemplateItem(models.Model):
     description = models.TextField()
     has_comment = models.BooleanField()
     has_score = models.BooleanField()
+
+
+class ReviewItem(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="reviewsItem")
+    templateItem = models.ForeignKey(ReviewTemplateItem, on_delete=models.CASCADE, related_name="reviewsItem")
+    comment = models.TextField()
+    score = models.IntegerField()

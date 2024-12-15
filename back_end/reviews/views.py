@@ -7,7 +7,7 @@ from rest_framework import status
 from papers.models import Paper
 from users.models import User
 from conference_roles.models import ConferenceRole
-from .models import Review
+from .models import Review, ReviewItem, ReviewTemplateItem
 from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
 from rest_framework.decorators import api_view
@@ -223,6 +223,7 @@ def get_paper_reviews(request):
 
     # Filtra le recensioni per il paper specificato
     reviews = Review.objects.filter(paper_id=paper_id).select_related('user')
+    
 
     # Ottieni i parametri di paginazione dall'URL
     page_number = request.GET.get('page', 1)
@@ -243,6 +244,7 @@ def get_paper_reviews(request):
             # Nascondi i dettagli dell'utente se la conferenza è single o double blind
             reviews_data = [
                 {
+                    "id":review.id,
                     "user": {
                         "id": review.user.id,
                         "first_name": "Anonymous", 
@@ -259,6 +261,7 @@ def get_paper_reviews(request):
         else:
             reviews_data = [
                 {
+                    "id":review.id,
                     "user": {
                         "id": review.user.id,
                         "first_name": review.user.first_name,
@@ -275,6 +278,7 @@ def get_paper_reviews(request):
     else:
         reviews_data = [
             {
+                "id":review.id,
                 "user": {
                     "id": review.user.id,
                     "first_name": review.user.first_name,
@@ -288,6 +292,23 @@ def get_paper_reviews(request):
             }
             for review in page_obj
         ]
+
+    template = ReviewTemplateItem.objects.filter(conference=conference)
+
+    for review in reviews_data:
+        items = ReviewItem.objects.filter(review_id = review.get('id')) 
+        reviewItems = [
+            {
+                "label":template.get(id=item.templateItem.id).label,
+                "review":item.review.id,
+                "templateItem":item.templateItem.id,
+                "comment":item.comment,
+                "score":item.score,
+                "has_comment":template.get(id=item.templateItem.id).has_comment,
+                "has_score":template.get(id=item.templateItem.id).has_score
+            } for item in items
+        ]
+        review["reviewItems"] = reviewItems
 
     response_data = {
         "current_page": page_obj.number,
@@ -346,6 +367,7 @@ def sanitize_filename(filename):
 )
 @api_view(['POST'])
 @csrf_exempt
+@get_user
 def create_review(request):
     """Aggiunge una recensione per un paper specifico."""
     try:
@@ -354,13 +376,15 @@ def create_review(request):
         comment_text = data.get('comment_text')
         score = data.get('score')
         confidence_level = data.get('confidence_level')
+        reviewItemList = data.get('reviewItemList')
 
         print("DEBUGGING THE CREATE NOW")
         print ([
             paper_id,
             comment_text,
             score,
-            confidence_level
+            confidence_level,
+            reviewItemList
         ])
 
         if not all([paper_id, comment_text, score]):
@@ -380,15 +404,26 @@ def create_review(request):
             return JsonResponse({"error": "Paper non trovato"}, status=status.HTTP_404_NOT_FOUND)
 
 
-        ##user = request.user
+        user = request.user
         # cancella poi, è per forzare l'utente
-        user = User.objects.get(id=data.get('user_id'))
+        #user = User.objects.get(id=data.get('user_id'))
     
         if Review.objects.filter(paper=paper, user=user).exists():
             return JsonResponse({"error": "Hai già recensito questo paper"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            review = Review.objects.create(paper=paper, user=user, comment_text=comment_text, score=score, confidence_level=confidence_level)
+            review = Review.objects.create(paper=paper, 
+                                            user=user, 
+                                            comment_text=comment_text, 
+                                            score=score, 
+                                            confidence_level=confidence_level)
+            for reviewItem in reviewItemList:
+                ReviewItem.objects.create(
+                    review = review,
+                    templateItem = ReviewTemplateItem.objects.get(id = reviewItem.get('id')),
+                    comment = reviewItem.get('comment'),
+                    score = reviewItem.get('score'),
+                )
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         

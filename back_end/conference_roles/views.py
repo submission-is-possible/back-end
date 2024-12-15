@@ -155,10 +155,13 @@ def get_user_conferences(request):
             template = []
             for templateItem in templateItems:
                 template.append({
+                    'id':templateItem.id,
                     'label':templateItem.label,
                     'description':templateItem.description,
                     'has_comment':templateItem.has_comment,
                     'has_score':templateItem.has_score,
+                    'comment':'',
+                    'score':0,
                 })
             conferences_dict[conf_id] = {
                 "id": role.conference.id,
