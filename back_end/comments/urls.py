@@ -7,6 +7,7 @@ urlpatterns = [
     path('<int:comment_id>/', views.get_comment_by_id, name='get_specific_comment'),
     path('<int:comment_id>/update/', views.update_comment, name='update_comment'),
     path('paper/<int:paper_id>/get_comments', views.get_comments_by_paper, name='get_comments_by_paper'),
+    path('review/<int:review_id>/get_comments', views.get_comments_by_review, name='get_comments_by_review'),
     path('delete/<int:comment_id>/', views.delete_comment, name='delete_comment'),
     path('deleteall/paper/<int:paper_id>', views.delete_comments_by_paper, name='delete_all_comments_of_paper'),
     path('deleteall/review/<int:review_id>', views.delete_comments_by_review, name='delete_all_comments_of_review'),

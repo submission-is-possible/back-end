@@ -11,6 +11,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.decorators import api_view
 from users.decorators import get_user
+from reviews.models import ReviewTemplateItem
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
@@ -68,6 +69,7 @@ def create_conference(request):
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
             status = data.get('status')
+            reviewTemplate = data.get('reviewTemplate')
 
             if not (title and deadline and description and papers_deadline):
                 return JsonResponse({'error': 'Missing required fields'}, status=400)
@@ -143,6 +145,17 @@ def create_conference(request):
 
                 # Send the invitation email to the reviewer
                 send_invitation_email(reviewer_email, title, admin_user)
+                
+            for reviewTemplateItem in reviewTemplate or []:
+                ReviewTemplateItem.objects.create(
+                    conference = conference,
+                    label = reviewTemplateItem.get('label'),
+                    description = reviewTemplateItem.get('description'),
+                    has_comment = reviewTemplateItem.get('has_comment'),
+                    has_score = reviewTemplateItem.get('has_score')
+                )
+            
+
 
             return JsonResponse({
                 'message': 'Conference created successfully',
@@ -259,6 +272,7 @@ def edit_conference(request):
             reviewers = data.get('reviewers')
             papers_deadline = data.get('papers_deadline')
             status = data.get('status')
+            reviewTemplate = data.get('reviewTemplate')
 
             # Verifica che conference_id sia presente
             if not conference_id:
@@ -321,8 +335,21 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
-                    # Send the invitation email to the reviewer
-                    send_invitation_email(reviewer_email, title, user)
+                    
+                send_invitation_email(reviewer_email, title, user)
+
+            if reviewTemplate:
+                ReviewTemplateItem.objects.filter(conference = conference).delete()
+                for reviewTemplateItem in reviewTemplate or []:
+                    ReviewTemplateItem.objects.create(
+                        conference = conference,
+                        label = reviewTemplateItem.get('label'),
+                        description = reviewTemplateItem.get('description'),
+                        has_comment = reviewTemplateItem.get('has_comment'),
+                        has_score = reviewTemplateItem.get('has_score')
+                    )
+            
+            # Send the invitation email to the reviewer
 
             if status:
                 conference.status = status
@@ -440,6 +467,15 @@ def get_conferences(request):
         conferences = Conference.objects.all().order_by('created_at')
         conferences_list = []
         for conference in conferences:
+            templateItems = ReviewTemplateItem.objects.filter(conference = conference)
+            template = []
+            for templateItem in templateItems:
+                template.append({
+                    'label':templateItem.label,
+                    'description':templateItem.description,
+                    'has_comment':templateItem.has_comment,
+                    'has_score':templateItem.has_score,
+                })
             conferences_list.append({
                 'id': conference.id,
                 'title': conference.title,
@@ -448,7 +484,8 @@ def get_conferences(request):
                 'admin_id': conference.admin_id.email,
                 'created_at': conference.created_at,
                 'papers_deadline': conference.papers_deadline,
-                'status': conference.status
+                'status': conference.status,
+                'reviewTemplate': template
             })
 
         paginator = Paginator(conferences_list, page_size)
