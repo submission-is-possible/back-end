@@ -20,12 +20,13 @@ from notifications.models import Notification
 from users.models import User  # Importa il modello User dall'app users
 from papers.models import Paper
 from reviews.models import Review
+from .helpers import send_invitation_email
 from .models import Conference  # Importa il modello Conference creato in precedenza
 from conference_roles.models import ConferenceRole
 from assign_paper_reviewers.models import PaperReviewAssignment
 from preferences.models import Preference
 import  assign_paper_reviewers, conference_roles, notifications, papers
-
+from django.core.mail import send_mail
 
 
 
@@ -139,6 +140,9 @@ def create_conference(request):
                     status=0,  # pending
                     type=1  # reviewer type
                 )
+
+                # Send the invitation email to the reviewer
+                send_invitation_email(reviewer_email, title, admin_user)
 
             return JsonResponse({
                 'message': 'Conference created successfully',
@@ -317,6 +321,9 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+                    # Send the invitation email to the reviewer
+                    send_invitation_email(reviewer_email, title, user)
+
             if status:
                 conference.status = status
 
