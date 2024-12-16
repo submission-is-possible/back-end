@@ -7,6 +7,7 @@ from rest_framework import status
 from papers.models import Paper
 from users.models import User
 from conference_roles.models import ConferenceRole
+from comments.models import Comment
 from .models import Review, ReviewItem, ReviewTemplateItem
 from django.views.decorators.csrf import csrf_exempt
 from drf_yasg import openapi
@@ -309,6 +310,24 @@ def get_paper_reviews(request):
             } for item in items
         ]
         review["reviewItems"] = reviewItems
+
+    if is_admin or is_reviewer:
+        for review in reviews_data:
+            comments = Comment.objects.filter(review_id = review.get('id'))
+            comments_data = [
+                {
+                    "user": {
+                        "id": comment.user.id,
+                        "first_name": comment.user.first_name,
+                        "last_name": comment.user.last_name,
+                        "email": comment.user.email
+                    },
+                    "review":comment.review.id,
+                    "comment_text":comment.comment_text,
+                    "created_at":comment.created_at.isoformat()
+                } for comment in comments
+            ]
+            review["comments"] = comments_data
 
     response_data = {
         "current_page": page_obj.number,
@@ -693,3 +712,134 @@ def has_been_reviewed(request):
             return JsonResponse({"has_been_reviewed": False}, status=status.HTTP_200_OK)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+@api_view(['GET'])
+@csrf_exempt
+@get_user
+def get_review(request, paper_id):
+    if request.method != 'GET':
+        return JsonResponse({"error": "Only GET requests are allowed"}, status=405)
+    
+    
+
+    if not paper_id:
+        return JsonResponse({"error": "Missing paper_id"}, status=400)
+
+    
+    reviews = Review.objects.filter(paper_id = paper_id, user = request.user)
+    
+
+    # Ottieni i parametri di paginazione dall'URL
+    page_number = request.GET.get('page', 1)
+    page_size = request.GET.get('page_size', 10)
+
+    # Applica la paginazione
+    paginator = Paginator(reviews, page_size)
+    page_obj = paginator.get_page(page_number)
+
+    conference = Paper.objects.get(id=paper_id).conference
+
+    is_admin = ConferenceRole.objects.filter(conference=conference, user=request.user, role='admin').exists()
+    is_reviewer = ConferenceRole.objects.filter(conference=conference, user=request.user, role='reviewer').exists()
+    is_author = ConferenceRole.objects.filter(conference=conference, user=request.user, role='author').exists()
+
+    if is_author and not is_admin:
+        if (conference.status == 'single_blind' or conference.status == 'double_blind'):
+            # Nascondi i dettagli dell'utente se la conferenza è single o double blind
+            reviews_data = [
+                {
+                    "id":review.id,
+                    "user": {
+                        "id": review.user.id,
+                        "first_name": "Anonymous", 
+                        "last_name": "Reviewer",
+                        "email": "***"
+                    },
+                    "comment_text": review.comment_text,
+                    "score": review.score,
+                    "confidence_level": review.confidence_level,
+                    "created_at": review.created_at.isoformat()
+                }
+                for review in page_obj
+            ]
+        else:
+            reviews_data = [
+                {
+                    "id":review.id,
+                    "user": {
+                        "id": review.user.id,
+                        "first_name": review.user.first_name,
+                        "last_name": review.user.last_name,
+                        "email": review.user.email
+                    },
+                    "comment_text": review.comment_text,
+                    "score": review.score,
+                    "confidence_level": review.confidence_level,
+                    "created_at": review.created_at.isoformat()
+                }
+                for review in page_obj
+            ]
+    else:
+        reviews_data = [
+            {
+                "id":review.id,
+                "user": {
+                    "id": review.user.id,
+                    "first_name": review.user.first_name,
+                    "last_name": review.user.last_name,
+                    "email": review.user.email
+                },
+                "comment_text": review.comment_text,
+                "score": review.score,
+                "confidence_level": review.confidence_level,
+                "created_at": review.created_at.isoformat()
+            }
+            for review in page_obj
+        ]
+
+    template = ReviewTemplateItem.objects.filter(conference=conference)
+
+    for review in reviews_data:
+        items = ReviewItem.objects.filter(review_id = review.get('id')) 
+        reviewItems = [
+            {
+                "label":template.get(id=item.templateItem.id).label,
+                "review":item.review.id,
+                "templateItem":item.templateItem.id,
+                "comment":item.comment,
+                "score":item.score,
+                "has_comment":template.get(id=item.templateItem.id).has_comment,
+                "has_score":template.get(id=item.templateItem.id).has_score
+            } for item in items
+        ]
+        review["reviewItems"] = reviewItems
+
+    if is_admin or is_reviewer:
+        for review in reviews_data:
+            comments = Comment.objects.filter(review_id = review.get('id'))
+            comments_data = [
+                {
+                    "user": {
+                        "id": comment.user.id,
+                        "first_name": comment.user.first_name,
+                        "last_name": comment.user.last_name,
+                        "email": comment.user.email
+                    },
+                    "review":comment.review.id,
+                    "comment_text":comment.comment_text,
+                    "created_at":comment.created_at.isoformat()
+                } for comment in comments
+            ]
+            review["comments"] = comments_data
+
+    response_data = {
+        "current_page": page_obj.number,
+        "total_pages": paginator.num_pages,
+        "total_reviews": paginator.count,
+        "reviews": reviews_data
+    }
+
+    return JsonResponse(response_data, status=200)
+
