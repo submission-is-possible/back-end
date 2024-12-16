@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from conference_roles.models import ConferenceRole
 from users.models import User
+from .helpers import send_reviewer_acceptance_email
 from .models import Notification
 from rest_framework.decorators import api_view
 from drf_yasg import openapi
@@ -325,6 +326,9 @@ def update_notification(request):
             notification.user_sender = user_receiver
             notification.user_receiver = user_sender
             notification.save()
+
+            # Email to admin of the reviewer acceptance
+            send_reviewer_acceptance_email(user_sender, user_receiver, notification.conference.title)
 
             return JsonResponse({'message': 'Notification updated successfully'}, status=200)
         except json.JSONDecodeError:
