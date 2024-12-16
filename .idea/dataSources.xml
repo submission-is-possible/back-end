@@ -10,5 +10,12 @@
       <jdbc-url>jdbc:sqlite:C:\Users\UTENTE\Desktop\UNI\Magistrale\RDM\Submission-Is-Possible\back-end\back_end\db.sqlite3</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
+    <data-source source="LOCAL" name="db.sqlite3" uuid="2d7aa23c-9d9b-410f-998e-16ce030ca443">
+      <driver-ref>sqlite.xerial</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/back_end/db.sqlite3</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
   </component>
 </project>

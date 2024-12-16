@@ -1,4 +1,5 @@
 from django.test import TestCase, Client
+from django.contrib.auth.hashers import make_password
 from .models import User
 from django.urls import reverse
 import json
@@ -54,19 +55,25 @@ class CreateUserTestCase(TestCase):
 
     def test_create_user_invalid_method(self):
         """Test errore per metodo non POST."""
-        response = self.client.get(self.url)  # Usa GET invece di POST
-
+        response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertIn('error', response.json())
-        self.assertEqual(response.json()['error'], 'Only POST requests are allowed')
+        self.assertIn('detail', response.json())
+        self.assertEqual(response.json()['detail'], 'Method "GET" not allowed.')
+
+
+
 
 class LoginUserTestCase(TestCase):
     def setUp(self):
         self.client = Client()
         self.url = reverse('login')
-        # Creazione utente senza `create_user`, con `objects.create`
+        
+        # Crea l'utente di test con la password hashata
         self.user = User.objects.create(
-            first_name="John", last_name="Doe", email="john.doe@example.com", password="securepassword123"
+            first_name="John",
+            last_name="Doe",
+            email="john.doe@example.com",
+            password=make_password("securepassword123")  # Usa make_password per hasharla
         )
 
     #verifica il login con credenziali corrette.
@@ -102,4 +109,4 @@ class LoginUserTestCase(TestCase):
     def test_login_invalid_method(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 405)
-        self.assertIn('Only POST requests are allowed', response.json().get("error"))
+        self.assertEqual(response.json()['detail'], 'Method "GET" not allowed.')

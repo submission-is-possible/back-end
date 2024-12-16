@@ -1,1 +1,15 @@
 .pytest_cache
+
+# Ignora tutte le cartelle __pycache__
+**/__pycache__/
+
+# Ignora file bytecode
+*.pyc
+
+# Ignora il file del database SQLite
+db.sqlite3
+back_end/papers_pdf/
+
+papers_pdf/
+
+back_end/papers/paper/

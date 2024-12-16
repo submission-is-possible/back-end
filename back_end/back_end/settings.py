@@ -37,8 +37,20 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+  
     'corsheaders',
+    'rest_framework',   
+    'drf_yasg',
+  
     'users',
+    'conference',
+    'conference_roles',
+    'papers',
+    'reviews',
+    'notifications',
+    'assign_paper_reviewers',
+    'comments',
+    'preferences',
 ]
 
 MIDDLEWARE = [
@@ -56,6 +68,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # URL del frontend.
     "http://127.0.0.1:5173",  # Alternativa per localhost
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'back_end.urls'
 
@@ -129,3 +143,30 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_URL = '/users/login/'
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+# Session Cookie Settings
+SESSION_COOKIE_NAME = 'session_id'  # Name of the session cookie
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+SESSION_COOKIE_SECURE = True  # Set to True if using HTTPS
+SESSION_COOKIE_SAMESITE = 'None'  # Options: 'Lax', 'Strict', or 'None' for cross-site cookies
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Whether the session expires when the user closes their browser
+SESSION_COOKIE_AGE = 1209600  # Age of session cookies, in seconds (2 weeks by default)
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024 * 1024
+
+# Email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'submissionispossible6@gmail.com'
+EMAIL_HOST_PASSWORD = 'oqja aewn bizl qtzu'
