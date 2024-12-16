@@ -143,6 +143,9 @@ def create_conference(request):
                     type=1  # reviewer type
                 )
 
+                # Send the invitation email to the reviewer
+                send_invitation_email(reviewer_email, title, admin_user)
+                
             for reviewTemplateItem in reviewTemplate or []:
                 ReviewTemplateItem.objects.create(
                     conference = conference,
@@ -152,8 +155,7 @@ def create_conference(request):
                     has_score = reviewTemplateItem.get('has_score')
                 )
             
-            # Send the invitation email to the reviewer
-            send_invitation_email(reviewer_email, title, admin_user)
+
 
             return JsonResponse({
                 'message': 'Conference created successfully',
@@ -333,6 +335,8 @@ def edit_conference(request):
                         status=0,  # pending
                         type=1  # reviewer type
                     )
+                    
+                send_invitation_email(reviewer_email, title, user)
 
             if reviewTemplate:
                 ReviewTemplateItem.objects.filter(conference = conference).delete()
@@ -346,7 +350,7 @@ def edit_conference(request):
                     )
             
             # Send the invitation email to the reviewer
-            send_invitation_email(reviewer_email, title, user)
+
             if status:
                 conference.status = status
 
